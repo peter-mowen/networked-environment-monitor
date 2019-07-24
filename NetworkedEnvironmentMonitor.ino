@@ -11,9 +11,19 @@
 #define LCD_PERIOD              1000            // in milliseconds
 #define SERIAL_PERIOD           1*LCD_PERIOD    // how often serial prints
 
-// define other values
-#define MAX_ADC_READING         1023            // max num` on analog to digital converter
-#define ADC_REF_VOLTAGE         5               // max voltage that could appear on ADC
+// define ADC values
+#define MAX_ADC_READING         1024            // max num` on analog to digital converter
+#define ADC_REF_VOLTAGE         3.3             // max voltage that could appear on ADC in V
+#define ADC_OFFSET              31              // See comment below
+/*
+ * Have to add an ADC_OFFSET because the A0 pin on the esp8266 is not as accurate as the 
+ * Arduino. I found the above value by setting up a voltage divider using two 1k resistors
+ * and found the sensor value for the voltage between the two. On my multimeter, it read
+ * 1.65V, which is half of 3.3V. The ADC pin should have read 512 at that point, but it 
+ * did not. Took the difference between the ADC pin value and 512 and set it as the offset.
+ * This brought the value close enough to what the Arduino was reading.
+ */
+
 #define SERIAL_DATA_ARRAY_SIZE  1               // how many data sent to serial
 
 // Global Variables
@@ -108,7 +118,6 @@ void loop()
     currentMillis = millis();
     if (currentMillis - startMillisSerial >= SERIAL_PERIOD)
     {
-        Serial.println(data0);
         printDataToSerial(serialData);
         startMillisSerial = currentMillis;
     }
@@ -137,12 +146,17 @@ void loop()
 
 float readTemperature()
 {
-    int thermistorSensorVal = analogRead(THERMISTOR_PIN);
-    /* convert the ADC reading to thermistorVoltage
-    * This formula came from the Arduino Projects book.
-    */
-    // figure out temperature
+    int sum = 0;
+    int numOfSensorReads = 10;
+    for (int i = 0; i< numOfSensorReads ; i++)
+    {
+        sum += analogRead(THERMISTOR_PIN) - ADC_OFFSET;
+    }
+    int thermistorSensorVal = sum / numOfSensorReads;
+    //Serial.println(String(thermistorSensorVal));
+    //convert the ADC reading to thermistorVoltage
     float thermistorVoltage = ( (float)thermistorSensorVal / MAX_ADC_READING ) * ADC_REF_VOLTAGE;   // [V]
+    //Serial.println(String(thermistorVoltage));
     float temperature = (thermistorVoltage - 0.5)*100;    // [degrees C]
     return temperature;
 }
