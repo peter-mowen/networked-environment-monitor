@@ -1,5 +1,4 @@
 //#include <LiquidCrystal.h>
-
 // define pins
 #define THERMISTOR_PIN          A0              // Pin number for input from thermistor
 //#define LDR_PIN                 A1              // Pin number for light dependent resistor
@@ -9,7 +8,7 @@
 // define timer values
 #define LCD_TIMEOUT             5000            // milliseconds until screen turns off
 #define LCD_PERIOD              1000            // in milliseconds
-#define SERIAL_PERIOD           1*LCD_PERIOD    // how often serial prints
+#define MQTT_PERIOD             1*LCD_PERIOD    // how often a message is published to MQTT
 
 // define ADC values
 #define MAX_ADC_READING         1024            // max num` on analog to digital converter
@@ -24,12 +23,27 @@
  * This brought the value close enough to what the Arduino was reading.
  */
 
-#define SERIAL_DATA_ARRAY_SIZE  1               // how many data sent to serial
+#define NUM_OF_DATA              1                // how many sets of data can be sent
+
+#define DEBUG
+
+//PubSub Stuff
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h>
+
+const char* ssid = "LouisTheHome";
+const char* password = "1nTheEventOfFireLookDirectlyAtFire";
+const char* mqtt_server = "192.168.1.13";
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+const char* clientID = "Thermometer01";
+const char* topic0 = "backroom/temp";
 
 // Global Variables
 //LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
 
-unsigned long startMillisSerial;
+unsigned long previousMillisMQTT;
 unsigned long currentMillis;
 
 unsigned long startMillisLCD;
@@ -65,7 +79,7 @@ byte omega[8] = {
 void setup()
 {
     // Open Serial port. Set Baud rate to 9600
-    Serial.begin(9600);
+    Serial.begin(115200);
     // Send out startup phrase
     Serial.println("Arduino Starting Up...");
     /*
@@ -87,17 +101,18 @@ void setup()
     delay(3000);
     lcd.clear();
     */
+
+    //Setup MQTT
+    setup_wifi();
+    client.setServer(mqtt_server, 1883);
+    client.setCallback(callback);
+    
     // initial reading
     float temperature = readTemperature();
-    //double ldrResistance = readLightLevel();
-
-    // package data to send to serial
-    String data0 = String("degrees C: " + String(temperature));
-    //String data1 = String("ldr resistance: " + String(ldrResistance));
-    String serialData[SERIAL_DATA_ARRAY_SIZE] = {data0};
-
-    printDataToSerial(serialData);
-    startMillisSerial = millis();  // initial start time
+    char msg[7];
+    sprintf(msg, "%.2f", temperature);
+    publishData(topic0, msg);
+    previousMillisMQTT = millis();  // initial start time
     /*
     printDataToLCD(temperature);
     delay(LCD_TIMEOUT);
@@ -107,21 +122,26 @@ void setup()
 
 void loop()
 {
-    // Get sensor reading
-    float temperature = readTemperature();
     //double ldrResistance = readLightLevel();
     // package data to send to serial
-    String data0 = String("degrees C: " + String(temperature));
     //String data1 = String("ldr resistance: " + String(ldrResistance));
-    String serialData[SERIAL_DATA_ARRAY_SIZE] = {data0};
 
+    if (!client.connected()) { reconnect(); }
+    client.loop();
+    
     currentMillis = millis();
-    if (currentMillis - startMillisSerial >= SERIAL_PERIOD)
+    
+    if ((currentMillis - previousMillisMQTT >= MQTT_PERIOD))
     {
-        printDataToSerial(serialData);
-        startMillisSerial = currentMillis;
+        // Get sensor reading
+        float temperature = readTemperature();
+        char msg[7];
+        sprintf(msg, "%.2f", temperature);
+        publishData(topic0, msg);
+        previousMillisMQTT = currentMillis;
     }
-    /*
+    
+    /* TODO: move this to its own function
     currentButtonState = digitalRead(BUTTON_PIN);
     //Serial.println(String(currentButtonState));
     //Serial.println(String(currentButtonState) + " " + String(previousButtonState));
@@ -144,6 +164,65 @@ void loop()
     */
 }
 
+/*
+ * MQTT Functions
+ */
+void setup_wifi() 
+{
+    delay(10);
+    // We start by connecting to a WiFi network
+    Serial.println();
+    Serial.print("Connecting to ");
+    Serial.println(ssid);
+    
+    WiFi.begin(ssid, password);
+    
+    while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+    }
+    
+    Serial.println("");
+    Serial.println("WiFi connected");
+    Serial.println("IP address: ");
+    Serial.println(WiFi.localIP());
+}
+
+void callback(char* topic, byte* payload, unsigned int length)
+{
+    Serial.print("Message arrived [");
+    Serial.print(topic);
+    Serial.print("] ");
+    for (int i = 0; i < length; i++) {
+    Serial.print((char)payload[i]);
+    }
+    Serial.println();
+}
+
+void reconnect() {
+    // Loop until we're reconnected
+    while (!client.connected()) {
+        Serial.print("Attempting MQTT connection...");
+        // Attempt to connect
+        if (client.connect("Thermometer01")){
+            Serial.println("connected");
+            // Once connected, publish an announcement...
+            const char* heartbeat = "heartbeat";
+            client.publish( heartbeat, clientID);
+            // ... and resubscribe
+        } else {
+            Serial.print("failed, rc=");
+            Serial.print(client.state());
+            Serial.println(" try again in 5 seconds");
+            // Wait 5 seconds before retrying
+            delay(5000);
+            }
+    }
+}
+
+/*
+ * Environment Monitor Functions
+ */
 float readTemperature()
 {
     int sum = 0;
@@ -172,17 +251,12 @@ double readLightLevel()
     return ldrResistance;
 }
 */
-void printDataToSerial(String serialData[])
+void publishData(const char* topic, const char* msg)
 {
-    String message = "@";
-    for (int i = 0; i < SERIAL_DATA_ARRAY_SIZE; i++)
-    {
-        if (i != SERIAL_DATA_ARRAY_SIZE -1)
-            message += serialData[i] + ", ";
-        else
-            message += serialData[i];
-    }
-    Serial.println(message);
+    client.publish(topic, msg);
+    #ifdef DEBUG
+    Serial.println("topic: " + String(topic) + " , msg: " + String(msg));
+    #endif
 }
 /*
 void printDataToLCD(int temperature)
