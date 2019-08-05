@@ -1,9 +1,8 @@
-//#include <LiquidCrystal.h>
 // define pins
 #define THERMISTOR_PIN          A0              // Pin number for input from thermistor
 //#define LDR_PIN                 A1              // Pin number for light dependent resistor
 #define BUTTON_PIN              7               // pin number for button input
-#define LCD_POWER_PIN           8               // Pin number to toggle power to LCD screen
+//#define LCD_POWER_PIN           8               // Pin number to toggle power to LCD screen
 
 // define timer values
 #define LCD_TIMEOUT             5000            // milliseconds until screen turns off
@@ -31,26 +30,26 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 
-const char* ssid = "LouisTheHome";
-const char* password = "1nTheEventOfFireLookDirectlyAtFire";
-const char* mqtt_server = "192.168.1.13";
+const char* ssid = "CCP WLAN"; //"LouisTheHome";
+const char* password = ""; //"1nTheEventOfFireLookDirectlyAtFire";
+const char* mqtt_server = "10.4.136.255";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
-const char* clientID = "Thermometer01";
-const char* topic0 = "backroom/temp";
+const char* clientID = "Monitor01";
+const char* topic0 = "Living Room/temp";
 
-// Global Variables
-//LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
+// OLED libraries and constants
+#include <ArducamSSD1306.h>    // Modification of Adafruit_SSD1306 for ESP8266 compatibility
+#include <Adafruit_GFX.h>   // Needs a little change in original Adafruit library (See README.txt file)
+#include <Wire.h>           // For I2C comm, but needed for not getting compile error
 
-unsigned long previousMillisMQTT;
-unsigned long currentMillis;
+#define OLED_RESET  16  // Pin 15 -RESET digital signal
 
-unsigned long startMillisLCD;
+#define LOGO16_GLCD_HEIGHT 16
+#define LOGO16_GLCD_WIDTH  16
 
-int currentButtonState = 0;
-int previousButtonState = 0;
-
+ArducamSSD1306 display(OLED_RESET); // FOR I2C
 /*
 byte degreeSymbol[8] = {
     B00111,
@@ -62,9 +61,7 @@ byte degreeSymbol[8] = {
     B00000,
     B00000,
 };
-*/
 
-/*
 byte omega[8] = {
     B01110,
     B10001,
@@ -76,31 +73,38 @@ byte omega[8] = {
     B11011,
 };
 */
+
+// Global Variables
+unsigned long previousMillisMQTT;
+unsigned long currentMillis;
+
+unsigned long startMillisLCD;
+
+int currentButtonState = 0;
+int previousButtonState = 0;
+
 void setup()
 {
-    // Open Serial port. Set Baud rate to 9600
+    // Open Serial port. Set Baud rate to 115200
     Serial.begin(115200);
     // Send out startup phrase
     Serial.println("Arduino Starting Up...");
-    /*
-    // intialize LCD display size
-    lcd.begin(16,2);
     
-    // initialize pin 8 to power LCD
-    pinMode(LCD_POWER_PIN, OUTPUT);
-    digitalWrite(LCD_POWER_PIN, HIGH);     
+    // SSD1306 Init
+    display.begin();  // Switch OLED
+    // Clear the buffer.
+    display.clearDisplay();
+    //Set text size, color, and position
+    display.setTextSize(2);
+    display.setTextColor(WHITE);
+    display.setCursor(0,0);
      
     // initialize pin to listen for button press
-    pinMode(BUTTON_PIN, INPUT);
-    */
-    /*
+    //pinMode(BUTTON_PIN, INPUT);
+    
     // print startup message to LCD display
-    lcd.print("Arduino");
-    lcd.setCursor(0,1);
-    lcd.print("Starting Up...");
-    delay(3000);
-    lcd.clear();
-    */
+    display.println(clientID);
+    display.display();
 
     //Setup MQTT
     setup_wifi();
@@ -113,11 +117,10 @@ void setup()
     sprintf(msg, "%.2f", temperature);
     publishData(topic0, msg);
     previousMillisMQTT = millis();  // initial start time
-    /*
-    printDataToLCD(temperature);
+    
+    //printDataToLCD(temperature);
     delay(LCD_TIMEOUT);
-    turnOffLCD();
-    */
+    //turnOffLCD();
 }
 
 void loop()
@@ -139,6 +142,7 @@ void loop()
         sprintf(msg, "%.2f", temperature);
         publishData(topic0, msg);
         previousMillisMQTT = currentMillis;
+        //printDataToLCD(temperature);
     }
     
     /* TODO: move this to its own function
@@ -193,9 +197,7 @@ void callback(char* topic, byte* payload, unsigned int length)
     Serial.print("Message arrived [");
     Serial.print(topic);
     Serial.print("] ");
-    for (int i = 0; i < length; i++) {
-    Serial.print((char)payload[i]);
-    }
+    for (int i = 0; i < length; i++) { Serial.print((char)payload[i]); }
     Serial.println();
 }
 
@@ -269,7 +271,7 @@ void printDataToLCD(int temperature)
     lcd.print(String(String("Temp: ") + String((int)temperature)));
     lcd.write(byte(0));
     lcd.print(String("C"));
-    /*
+    
     lcd.setCursor(0,1);
     
     double ldrDouble = ldrResistance;
@@ -301,9 +303,9 @@ void printDataToLCD(int temperature)
         lcd.print(String(String("LDR: ")  + String(ldrDouble, 2)));
         lcd.write(byte(1));
     }
-
 }
-
+*/
+/*
 void turnOffLCD(){
     lcd.clear();
     digitalWrite(LCD_POWER_PIN, LOW);
