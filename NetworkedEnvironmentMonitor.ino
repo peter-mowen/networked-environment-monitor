@@ -30,14 +30,14 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 
-const char* ssid = "CCP WLAN"; //"LouisTheHome";
-const char* password = ""; //"1nTheEventOfFireLookDirectlyAtFire";
-const char* mqtt_server = "10.4.136.255";
+const char* ssid =  "LouisTheHome"; //"CCP WLAN";
+const char* password = "1nTheEventOfFireLookDirectlyAtFire";
+const char* mqtt_server = "192.168.1.14";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
-const char* clientID = "Monitor01";
-const char* topic0 = "Living Room/temp";
+const char* clientID = "Peter's BR";
+const char* topic0 = "24/temperature";
 
 // OLED libraries and constants
 #include <ArducamSSD1306.h>    // Modification of Adafruit_SSD1306 for ESP8266 compatibility
@@ -50,29 +50,17 @@ const char* topic0 = "Living Room/temp";
 #define LOGO16_GLCD_WIDTH  16
 
 ArducamSSD1306 display(OLED_RESET); // FOR I2C
-/*
-byte degreeSymbol[8] = {
-    B00111,
-    B00101,
-    B00111,
-    B00000,
-    B00000,
-    B00000,
-    B00000,
-    B00000,
-};
 
-byte omega[8] = {
-    B01110,
-    B10001,
-    B10001,
-    B10001,
-    B10001,
-    B01010,
-    B01010,
-    B11011,
+byte degreeSymbol[8] = {
+    B01111,
+    B01001,
+    B01001,
+    B01111,
+    B00000,
+    B00000,
+    B00000,
+    B00000,
 };
-*/
 
 // Global Variables
 unsigned long previousMillisMQTT;
@@ -89,22 +77,11 @@ void setup()
     Serial.begin(115200);
     // Send out startup phrase
     Serial.println("Arduino Starting Up...");
-    
     // SSD1306 Init
     display.begin();  // Switch OLED
-    // Clear the buffer.
-    display.clearDisplay();
-    //Set text size, color, and position
-    display.setTextSize(2);
-    display.setTextColor(WHITE);
-    display.setCursor(0,0);
-     
+        
     // initialize pin to listen for button press
     //pinMode(BUTTON_PIN, INPUT);
-    
-    // print startup message to LCD display
-    display.println(clientID);
-    display.display();
 
     //Setup MQTT
     setup_wifi();
@@ -117,9 +94,10 @@ void setup()
     sprintf(msg, "%.2f", temperature);
     publishData(topic0, msg);
     previousMillisMQTT = millis();  // initial start time
+
     
-    //printDataToLCD(temperature);
-    delay(LCD_TIMEOUT);
+    printDataToOLED(temperature);
+    //delay(LCD_TIMEOUT);
     //turnOffLCD();
 }
 
@@ -141,8 +119,11 @@ void loop()
         char msg[7];
         sprintf(msg, "%.2f", temperature);
         publishData(topic0, msg);
+        #ifdef DEBUG
+            Serial.println(String(topic0) + " " + String(msg));
+        #endif
         previousMillisMQTT = currentMillis;
-        //printDataToLCD(temperature);
+        printDataToOLED(temperature);
     }
     
     /* TODO: move this to its own function
@@ -153,7 +134,7 @@ void loop()
     {
         previousButtonState = currentButtonState;
         digitalWrite(LCD_POWER_PIN, HIGH);
-        printDataToLCD(temperature);
+        printDataToOLED(temperature);
         startMillisLCD = millis();  // initial start time
     } else if ((currentButtonState == LOW)&&(previousButtonState == HIGH))
     {
@@ -206,7 +187,7 @@ void reconnect() {
     while (!client.connected()) {
         Serial.print("Attempting MQTT connection...");
         // Attempt to connect
-        if (client.connect("Thermometer01")){
+        if (client.connect(clientID)){
             Serial.println("connected");
             // Once connected, publish an announcement...
             const char* heartbeat = "heartbeat";
@@ -257,25 +238,31 @@ void publishData(const char* topic, const char* msg)
 {
     client.publish(topic, msg);
     #ifdef DEBUG
-    Serial.println("topic: " + String(topic) + " , msg: " + String(msg));
+        Serial.println("topic: " + String(topic) + " , msg: " + String(msg));
     #endif
 }
-/*
-void printDataToLCD(int temperature)
+
+void printDataToOLED(int temperature)
 {
-    lcd.createChar(0, degreeSymbol);
-    //lcd.createChar(1, omega);
-
-    // Update LCD display
-    lcd.clear();
-    lcd.print(String(String("Temp: ") + String((int)temperature)));
-    lcd.write(byte(0));
-    lcd.print(String("C"));
-    
+    // Clear the buffer.
+    display.clearDisplay();
+    //Set text size, color, and position
+    display.setTextSize(2);
+    display.setTextColor(WHITE);
+    display.setCursor(0,0);
+    display.println(clientID);
+    // Update OLED display
+    display.setCursor(0,16);
+    String displayTemp = "Temp: "+ String(temperature);
+    display.print(displayTemp);
+    display.drawBitmap(displayTemp.length()*12, 16, degreeSymbol, 8, 8, WHITE);
+    display.println(" C");
+    display.display();
+    /*    
     lcd.setCursor(0,1);
-    
-    double ldrDouble = ldrResistance;
 
+    double ldrDouble = ldrResistance;
+    
     String prefix = " ";
     if (ldrResistance > 1000000)
     {
@@ -303,8 +290,9 @@ void printDataToLCD(int temperature)
         lcd.print(String(String("LDR: ")  + String(ldrDouble, 2)));
         lcd.write(byte(1));
     }
+    */
 }
-*/
+
 /*
 void turnOffLCD(){
     lcd.clear();
