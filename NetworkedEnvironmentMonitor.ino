@@ -40,6 +40,7 @@ WiFiClient espClient;
 PubSubClient client(espClient);
 const char* clientID = "Peter's BR";
 const char* topic0 = "24/temperature";
+const char* topic1 = "24/light level";
 
 // OLED libraries and constants
 #include <ArducamSSD1306.h>    // Modification of Adafruit_SSD1306 for ESP8266 compatibility
@@ -98,11 +99,18 @@ void setup()
     pinMode(BIT_2, OUTPUT);
     digitalWrite(BIT_2, LOW);
     
-    // initial reading
-    float temperature = readTemperature();
-    char msg[7];
-    sprintf(msg, "%.2f", temperature);
-    publishData(topic0, msg);
+    // initial temperature reading
+    float temperature = readAmbientTemperature();
+    char temperature_msg[7];
+    sprintf(temperature_msg, "%.2f", temperature);
+
+    // initial light level reading
+    double lightLevel = readLightLevel();
+    char lightLevel_msg[7];
+    sprintf(lightLevel_msg, "%.2f", lightLevel);
+    
+    publishData(topic0, temperature_msg);
+    publishData(topic1, lightLevel_msg);
     previousMillisMQTT = millis();  // initial start time
 
     
@@ -124,14 +132,18 @@ void loop()
     
     if ((currentMillis - previousMillisMQTT >= MQTT_PERIOD))
     {
-        // Get sensor reading
-        float temperature = readTemperature();
-        char msg[7];
-        sprintf(msg, "%.2f", temperature);
-        publishData(topic0, msg);
-        #ifdef DEBUG
-            Serial.println(String(topic0) + " " + String(msg));
-        #endif
+        // Get temperature reading
+        float temperature = readAmbientTemperature();
+        char temperature_msg[7];
+        sprintf(temperature_msg, "%.2f", temperature);
+        publishData(topic0, temperature_msg);
+        
+        // Get light level reading
+        double lightLevel = readLightLevel();
+        char lightLevel_msg[7];
+        sprintf(lightLevel_msg, "%.2f", lightLevel);
+        publishData(topic1, lightLevel_msg);
+        
         previousMillisMQTT = currentMillis;
         printDataToOLED(temperature);
     }
@@ -218,29 +230,22 @@ void reconnect() {
 /*
  * Environment Monitor Functions
  */
-float readTemperature()
+float readAmbientTemperature()
 {
     float thermistorVoltage = readSensor(0); // select pin 0 on cd4051b 
-    #ifdef DEBUG
-    Serial.println(String(thermistorVoltage));
-    #endif
     float temperature = (thermistorVoltage - 0.5)*100;    // [degrees C]
     return temperature;
 }
 
 
-/*
+
 double readLightLevel()
 {
-    int ldrSensorVal = analogRead(LDR_PIN);
-
-    // figure out ldrResistance
-    double resistorVoltage = ( (double)ldrSensorVal / MAX_ADC_READING ) * ADC_REF_VOLTAGE;   // [V]
-    double ldrVoltage = 5.0 - resistorVoltage;
+    double resistorVoltage = readSensor(1);   // [V]
+    double ldrVoltage = MAX_ADC_READING - resistorVoltage;
     double ldrResistance = (ldrVoltage/resistorVoltage)*10000; //10k is resistor value
     return ldrResistance;
 }
-*/
 
 float readSensor(int input)
 {   
