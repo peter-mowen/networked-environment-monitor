@@ -1,8 +1,10 @@
 // define pins
-#define THERMISTOR_PIN          A0              // Pin number for input from thermistor
-//#define LDR_PIN                 A1              // Pin number for light dependent resistor
-#define BUTTON_PIN              7               // pin number for button input
-//#define LCD_POWER_PIN           8               // Pin number to toggle power to LCD screen
+#define ANALOG_IN                 A0              // Pin number for input from the multiplexer
+#define BIT_0                     0              // least significant bit
+#define BIT_1                     2              //
+#define BIT_2                     14              // most significant bit
+
+//#define BUTTON_PIN              7               // pin number for button input
 
 // define timer values
 #define LCD_TIMEOUT             5000            // milliseconds until screen turns off
@@ -30,9 +32,9 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 
-const char* ssid =  "LouisTheHome"; //"CCP WLAN";
-const char* password = "1nTheEventOfFireLookDirectlyAtFire";
-const char* mqtt_server = "192.168.1.14";
+const char* ssid = "CCP WLAN";// "LouisTheHome"; //
+const char* password = "";//"1nTheEventOfFireLookDirectlyAtFire";
+const char* mqtt_server = "10.4.138.132";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -87,6 +89,14 @@ void setup()
     setup_wifi();
     client.setServer(mqtt_server, 1883);
     client.setCallback(callback);
+
+    // initialize the multiplexer control pins;
+    pinMode(BIT_0, OUTPUT);
+    digitalWrite(BIT_0, LOW);
+    pinMode(BIT_1, OUTPUT);
+    digitalWrite(BIT_1, LOW);
+    pinMode(BIT_2, OUTPUT);
+    digitalWrite(BIT_2, LOW);
     
     // initial reading
     float temperature = readTemperature();
@@ -187,19 +197,21 @@ void reconnect() {
     while (!client.connected()) {
         Serial.print("Attempting MQTT connection...");
         // Attempt to connect
-        if (client.connect(clientID)){
+        if (client.connect(clientID))
+        {
             Serial.println("connected");
             // Once connected, publish an announcement...
             const char* heartbeat = "heartbeat";
             client.publish( heartbeat, clientID);
             // ... and resubscribe
-        } else {
+        } else 
+        {
             Serial.print("failed, rc=");
             Serial.print(client.state());
             Serial.println(" try again in 5 seconds");
             // Wait 5 seconds before retrying
             delay(5000);
-            }
+        }
     }
 }
 
@@ -208,20 +220,15 @@ void reconnect() {
  */
 float readTemperature()
 {
-    int sum = 0;
-    int numOfSensorReads = 10;
-    for (int i = 0; i< numOfSensorReads ; i++)
-    {
-        sum += analogRead(THERMISTOR_PIN) - ADC_OFFSET;
-    }
-    int thermistorSensorVal = sum / numOfSensorReads;
-    //Serial.println(String(thermistorSensorVal));
-    //convert the ADC reading to thermistorVoltage
-    float thermistorVoltage = ( (float)thermistorSensorVal / MAX_ADC_READING ) * ADC_REF_VOLTAGE;   // [V]
-    //Serial.println(String(thermistorVoltage));
+    float thermistorVoltage = readSensor(0); // select pin 0 on cd4051b 
+    #ifdef DEBUG
+    Serial.println(String(thermistorVoltage));
+    #endif
     float temperature = (thermistorVoltage - 0.5)*100;    // [degrees C]
     return temperature;
 }
+
+
 /*
 double readLightLevel()
 {
@@ -234,6 +241,34 @@ double readLightLevel()
     return ldrResistance;
 }
 */
+
+float readSensor(int input)
+{   
+    // select analog input on the cd4051b
+    switch(input)
+    {
+        case 0:
+            digitalWrite(BIT_0, LOW);
+            digitalWrite(BIT_1, LOW);
+            digitalWrite(BIT_2, LOW);
+            break;
+        case 1:
+            digitalWrite(BIT_0, HIGH);
+            digitalWrite(BIT_1, LOW);
+            digitalWrite(BIT_2, LOW);
+            break;
+    }
+    delay(1); // debounce time
+    int sum = 0;
+    int numOfSensorReads = 10;
+    for (int i = 0; i< numOfSensorReads ; i++) { sum += analogRead(ANALOG_IN) - ADC_OFFSET; }
+    int sensorVal = sum / numOfSensorReads;
+    #ifdef DEBUG
+    Serial.println("sensorVal = " + String(sensorVal));
+    #endif
+    float voltage = ( (float)sensorVal / MAX_ADC_READING ) * ADC_REF_VOLTAGE;   // [V]
+    return voltage;
+}
 void publishData(const char* topic, const char* msg)
 {
     client.publish(topic, msg);
