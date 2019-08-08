@@ -248,14 +248,10 @@ float readSensor(int input)
     switch(input)
     {
         case 0:
-            digitalWrite(BIT_0, LOW);
-            digitalWrite(BIT_1, LOW);
-            digitalWrite(BIT_2, LOW);
+            selectMultiplexerChannel(0);
             break;
         case 1:
-            digitalWrite(BIT_0, HIGH);
-            digitalWrite(BIT_1, LOW);
-            digitalWrite(BIT_2, LOW);
+            selectMultiplexerChannel(1);
             break;
     }
     delay(1); // debounce time
@@ -269,6 +265,14 @@ float readSensor(int input)
     float voltage = ( (float)sensorVal / MAX_ADC_READING ) * ADC_REF_VOLTAGE;   // [V]
     return voltage;
 }
+
+void selectMultiplexerChannel(int input)
+{
+    digitalWrite(BIT_0, bitRead(input, 0));
+    digitalWrite(BIT_1, bitRead(input, 1));
+    digitalWrite(BIT_2, bitRead(input, 2));
+}
+
 void publishData(const char* topic, const char* msg)
 {
     client.publish(topic, msg);
