@@ -32,7 +32,7 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 
-const char* ssid = "LouisTheHome";// CCP WLAN
+const char* ssid = "LouisTheHome";// 
 const char* password = "1nTheEventOfFireLookDirectlyAtFire";
 const char* mqtt_server = "192.168.1.10";//"192.168.1.10";
 
@@ -241,7 +241,7 @@ void reconnect() {
     oled.setTextSize(1);
     oled.setCursor(0,16);
     int attempt = 0;
-    int maxAttempts = 5;
+    int maxAttempts = 2;
     while (!client.connected()) {
         attempt++;
         Serial.println("Attempting to connect to MQTT broker at:");
@@ -266,19 +266,21 @@ void reconnect() {
         } else 
         {
             String failedMQTT = "failed, rc=" + String(client.state()) + "\ntry again in 5s";
-            Serial.println(failedMQTT);
-            oled.println(failedMQTT);
-            oled.display();
             if (attempt == maxAttempts)
             {
-                haltOnError("Failed to connect to MQTT broker after " + String(maxAttempts) + "  attempts. Reason:\n\n" + "  failed, rc= " + String(client.state()));
+                haltOnError("Failed to connect to MQTT broker after " 
+                + String(maxAttempts) + "  attempts. Reason:\n\n" 
+                + "  failed, rc= " + String(client.state()));
+            } 
+            else 
+            {
+                Serial.println(failedMQTT);
+                oled.println(failedMQTT);
+                oled.display();
+                // Wait 5 seconds before retrying
+                delay(5000);
+                clearBody();
             }
-            // Wait 5 seconds before retrying
-            delay(5000);
-            oled.fillRect(0,16,127,127, BLACK);
-            oled.setTextSize(1);
-            oled.setCursor(0,16);
-            
         }
     }
 }
@@ -344,12 +346,12 @@ void publishData(const char* topic, const char* msg)
 
 void printDataToOLED(float temperature)
 {
-    // Update OLED display
-    oled.clearDisplay();
-    clearAndUpdateTitle(clientID);
-    oled.setCursor(0,16);
     int roundedTemp = temperature + 0.5;
     String displayTemp = "Temp: "+ String(roundedTemp);
+
+    // Update OLED display
+    clearBody(); // sets cursor to begining of body
+    oled.setTextSize(2);
     oled.print(displayTemp);
     oled.drawBitmap(displayTemp.length()*12, 16, degreeSymbol, 8, 8, WHITE);
     oled.println(" C");
@@ -410,10 +412,17 @@ void haltOnError(String errMsg)
 
  void clearAndUpdateTitle(String title)
  {
-    oled.fillRect(0,0,127,15, BLACK);
+    oled.fillRect(0,0,127,16, BLACK);
     oled.setTextSize(2);
     oled.setTextColor(WHITE);
     oled.setCursor(0, 0);
     oled.println(title);
     oled.display();
+ }
+
+ void clearBody()
+ {
+    oled.fillRect(0,16,127,127, BLACK);
+    oled.setCursor(0,16);
+    
  }
