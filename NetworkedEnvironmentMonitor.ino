@@ -32,7 +32,7 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 
-const char* ssid = "LouisTheHome";// "CCP WLAN"
+const char* ssid = "LouisTheHome";// CCP WLAN
 const char* password = "1nTheEventOfFireLookDirectlyAtFire";
 const char* mqtt_server = "192.168.1.10";
 
@@ -198,12 +198,24 @@ void setup_wifi()
     oled.println(ssid);
     oled.display();
     WiFi.begin(ssid, password);
-    
-    while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-    oled.print(".");
-    oled.display();
+
+    int attempts = 0;
+    int maxAttempts = 20;
+    while (WiFi.status() != WL_CONNECTED) 
+    {
+        delay(500);
+        Serial.print(".");
+        oled.print(".");
+        oled.display();
+        attempts++;
+        if (attempts == maxAttempts)
+        {
+            String failedConnectMsg = "Failed to connect to WiFi network!";
+            oled.println("");
+            oled.println(failedConnectMsg);
+            oled.display();
+            haltOnError(failedConnectMsg);
+        }
     }
     
     Serial.println("");
@@ -379,9 +391,10 @@ void printDataToOLED(float temperature)
     */
 }
 
-/*
-void turnOffLCD(){
-    lcd.clear();
-    digitalWrite(LCD_POWER_PIN, LOW);
+void haltOnError(String errMsg)
+{
+    Serial.println("");
+    Serial.println("Halted for the following reason:");
+    Serial.println("\t" + errMsg);
+    while (true) { ESP.wdtFeed(); }; // feed the watchdog and hang here forever
 }
-*/
