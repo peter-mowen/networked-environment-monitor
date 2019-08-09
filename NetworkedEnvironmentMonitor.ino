@@ -52,7 +52,7 @@ const char* topic1 = "24/light level";
 #define LOGO16_GLCD_HEIGHT 16
 #define LOGO16_GLCD_WIDTH  16
 
-ArducamSSD1306 display(OLED_RESET); // FOR I2C
+ArducamSSD1306 oled(OLED_RESET); // FOR I2C
 
 byte degreeSymbol[8] = {
     B01111,
@@ -80,9 +80,17 @@ void setup()
     Serial.begin(115200);
     // Send out startup phrase
     Serial.println("Arduino Starting Up...");
+    
     // SSD1306 Init
-    display.begin();  // Switch OLED
-        
+    oled.begin();  // Switch OLED
+    oled.clearDisplay();
+    
+    //Set text size, color, and position
+    oled.setTextSize(2);
+    oled.setTextColor(WHITE);
+    oled.setCursor(0, 0);
+    oled.println("Starting..");
+    oled.display();
     // initialize pin to listen for button press
     //pinMode(BUTTON_PIN, INPUT);
 
@@ -176,17 +184,25 @@ void loop()
  */
 void setup_wifi() 
 {
+    String msg = "Connecting to: ";
     delay(10);
     // We start by connecting to a WiFi network
     Serial.println();
-    Serial.print("Connecting to ");
+    Serial.print(msg);
     Serial.println(ssid);
-    
+
+    oled.setTextSize(1);
+    oled.setCursor(0,16);
+    oled.println(msg);
+    oled.println(ssid);
+    oled.display();
     WiFi.begin(ssid, password);
     
     while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
+    oled.print(".");
+    oled.display();
     }
     
     Serial.println("");
@@ -289,20 +305,20 @@ void publishData(const char* topic, const char* msg)
 void printDataToOLED(float temperature)
 {
     // Clear the buffer.
-    display.clearDisplay();
+    oled.clearDisplay();
     //Set text size, color, and position
-    display.setTextSize(2);
-    display.setTextColor(WHITE);
-    display.setCursor(0,0);
-    display.println(clientID);
+    oled.setTextSize(2);
+    oled.setTextColor(WHITE);
+    oled.setCursor(0,0);
+    oled.println(clientID);
     // Update OLED display
-    display.setCursor(0,16);
+    oled.setCursor(0,16);
     int roundedTemp = temperature + 0.5;
     String displayTemp = "Temp: "+ String(roundedTemp);
-    display.print(displayTemp);
-    display.drawBitmap(displayTemp.length()*12, 16, degreeSymbol, 8, 8, WHITE);
-    display.println(" C");
-    display.display();
+    oled.print(displayTemp);
+    oled.drawBitmap(displayTemp.length()*12, 16, degreeSymbol, 8, 8, WHITE);
+    oled.println(" C");
+    oled.display();
     /*    
     lcd.setCursor(0,1);
 
