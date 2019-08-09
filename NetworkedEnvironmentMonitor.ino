@@ -34,7 +34,7 @@
 
 const char* ssid = "LouisTheHome";// CCP WLAN
 const char* password = "1nTheEventOfFireLookDirectlyAtFire";
-const char* mqtt_server = "192.168.1.10";
+const char* mqtt_server = "1";//"192.168.1.10";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -211,9 +211,6 @@ void setup_wifi()
         if (attempts == maxAttempts)
         {
             String failedConnectMsg = "Failed to connect to WiFi network!";
-            oled.println("");
-            oled.println(failedConnectMsg);
-            oled.display();
             haltOnError(failedConnectMsg);
         }
     }
@@ -246,16 +243,17 @@ void reconnect() {
     // Loop until we're reconnected
     oled.fillRect(0,16,127,127, BLACK);
     oled.setTextSize(1);
-    oled.setTextColor(WHITE, BLACK);
     oled.setCursor(0,16);
-    
+    int attempt = 0;
+    int maxAttempts = 5;
     while (!client.connected()) {
+        attempt++;
         Serial.println("Attempting to connect to MQTT broker at:");
         Serial.println(mqtt_server);
         oled.println("Attempting to connect");
-        oled.setCursor(7, 23);
+        oled.setCursor(7, 25);
         oled.println("to MQTT broker at:");
-        oled.setCursor(7, 30);
+        oled.setCursor(14, 34);
         oled.println(mqtt_server);
         oled.display();
         // Attempt to connect
@@ -271,11 +269,20 @@ void reconnect() {
             // ... and resubscribe
         } else 
         {
-            Serial.print("failed, rc=");
-            Serial.print(client.state());
-            Serial.println(" try again in 5 seconds");
+            String failedMQTT = "failed, rc=" + String(client.state()) + "\ntry again in 5s";
+            Serial.println(failedMQTT);
+            oled.println(failedMQTT);
+            oled.display();
+            if (attempt == maxAttempts)
+            {
+                haltOnError("Failed to connect to MQTT broker after " + String(maxAttempts) + "  attempts. Reason:\n\n" + "  failed, rc= " + String(client.state()));
+            }
             // Wait 5 seconds before retrying
             delay(5000);
+            oled.fillRect(0,16,127,127, BLACK);
+            oled.setTextSize(1);
+            oled.setCursor(0,16);
+            
         }
     }
 }
@@ -396,5 +403,12 @@ void haltOnError(String errMsg)
     Serial.println("");
     Serial.println("Halted for the following reason:");
     Serial.println("\t" + errMsg);
+
+    oled.fillRect(0,16,127,127, BLACK);
+    oled.setCursor(0, 16);
+    oled.println("ERROR:");
+    oled.println(errMsg);
+    oled.display();
+    
     while (true) { ESP.wdtFeed(); }; // feed the watchdog and hang here forever
 }
