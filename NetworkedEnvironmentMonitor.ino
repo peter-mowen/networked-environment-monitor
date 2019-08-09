@@ -32,9 +32,9 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 
-const char* ssid = "CCP WLAN";// "LouisTheHome"; //
-const char* password = "";//"1nTheEventOfFireLookDirectlyAtFire";
-const char* mqtt_server = "10.4.138.132";
+const char* ssid = "LouisTheHome";// "CCP WLAN"
+const char* password = "1nTheEventOfFireLookDirectlyAtFire";
+const char* mqtt_server = "192.168.1.10";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -286,7 +286,7 @@ void publishData(const char* topic, const char* msg)
     #endif
 }
 
-void printDataToOLED(int temperature)
+void printDataToOLED(float temperature)
 {
     // Clear the buffer.
     display.clearDisplay();
@@ -297,7 +297,8 @@ void printDataToOLED(int temperature)
     display.println(clientID);
     // Update OLED display
     display.setCursor(0,16);
-    String displayTemp = "Temp: "+ String(temperature);
+    int roundedTemp = temperature + 0.5;
+    String displayTemp = "Temp: "+ String(roundedTemp);
     display.print(displayTemp);
     display.drawBitmap(displayTemp.length()*12, 16, degreeSymbol, 8, 8, WHITE);
     display.println(" C");
