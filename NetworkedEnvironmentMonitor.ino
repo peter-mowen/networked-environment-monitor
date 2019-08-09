@@ -34,7 +34,7 @@
 
 const char* ssid = "LouisTheHome";// CCP WLAN
 const char* password = "1nTheEventOfFireLookDirectlyAtFire";
-const char* mqtt_server = "1";//"192.168.1.10";
+const char* mqtt_server = "192.168.1.10";//"192.168.1.10";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -86,11 +86,7 @@ void setup()
     oled.clearDisplay();
     
     //Set text size, color, and position
-    oled.setTextSize(2);
-    oled.setTextColor(WHITE);
-    oled.setCursor(0, 0);
-    oled.println("Starting..");
-    oled.display();
+    clearAndUpdateTitle("Starting");
     // initialize pin to listen for button press
     //pinMode(BUTTON_PIN, INPUT);
 
@@ -122,7 +118,7 @@ void setup()
     publishData(topic1, lightLevel_msg);
     previousMillisMQTT = millis();  // initial start time
 
-    
+    clearAndUpdateTitle(clientID);
     printDataToOLED(temperature);
     //delay(LCD_TIMEOUT);
     //turnOffLCD();
@@ -348,14 +344,9 @@ void publishData(const char* topic, const char* msg)
 
 void printDataToOLED(float temperature)
 {
-    // Clear the buffer.
-    oled.clearDisplay();
-    //Set text size, color, and position
-    oled.setTextSize(2);
-    oled.setTextColor(WHITE);
-    oled.setCursor(0,0);
-    oled.println(clientID);
     // Update OLED display
+    oled.clearDisplay();
+    clearAndUpdateTitle(clientID);
     oled.setCursor(0,16);
     int roundedTemp = temperature + 0.5;
     String displayTemp = "Temp: "+ String(roundedTemp);
@@ -404,11 +395,25 @@ void haltOnError(String errMsg)
     Serial.println("Halted for the following reason:");
     Serial.println("\t" + errMsg);
 
+    clearAndUpdateTitle("ERROR:");
     oled.fillRect(0,16,127,127, BLACK);
-    oled.setCursor(0, 16);
-    oled.println("ERROR:");
+    oled.setTextSize(1);
     oled.println(errMsg);
     oled.display();
     
     while (true) { ESP.wdtFeed(); }; // feed the watchdog and hang here forever
 }
+
+/*
+ * Display control functions
+ */
+
+ void clearAndUpdateTitle(String title)
+ {
+    oled.fillRect(0,0,127,15, BLACK);
+    oled.setTextSize(2);
+    oled.setTextColor(WHITE);
+    oled.setCursor(0, 0);
+    oled.println(title);
+    oled.display();
+ }
