@@ -98,6 +98,7 @@ void setup()
     setup_wifi();
     client.setServer(mqtt_server, 1883);
     client.setCallback(callback);
+    if (!client.connected()) { reconnect(); }
 
     // initialize the multiplexer control pins;
     pinMode(BIT_0, OUTPUT);
@@ -231,12 +232,27 @@ void callback(char* topic, byte* payload, unsigned int length)
 
 void reconnect() {
     // Loop until we're reconnected
+    oled.fillRect(0,16,127,127, BLACK);
+    oled.setTextSize(1);
+    oled.setTextColor(WHITE, BLACK);
+    oled.setCursor(0,16);
+    
     while (!client.connected()) {
-        Serial.print("Attempting MQTT connection...");
+        Serial.println("Attempting to connect to MQTT broker at:");
+        Serial.println(mqtt_server);
+        oled.println("Attempting to connect");
+        oled.setCursor(7, 23);
+        oled.println("to MQTT broker at:");
+        oled.setCursor(7, 30);
+        oled.println(mqtt_server);
+        oled.display();
         // Attempt to connect
         if (client.connect(clientID))
         {
             Serial.println("connected");
+            oled.println("connected");
+            oled.display();
+            delay(2000);
             // Once connected, publish an announcement...
             const char* heartbeat = "heartbeat";
             client.publish( heartbeat, clientID);
