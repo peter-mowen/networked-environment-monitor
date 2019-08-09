@@ -98,11 +98,8 @@ void setup()
 
     // initialize the multiplexer control pins;
     pinMode(BIT_0, OUTPUT);
-    digitalWrite(BIT_0, LOW);
     pinMode(BIT_1, OUTPUT);
-    digitalWrite(BIT_1, LOW);
     pinMode(BIT_2, OUTPUT);
-    digitalWrite(BIT_2, LOW);
     
     // initial temperature reading
     float temperature = readAmbientTemperature();
