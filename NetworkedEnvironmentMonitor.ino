@@ -184,16 +184,16 @@ void loop()
  */
 void setup_wifi() 
 {
-    String msg = "Connecting to: ";
+    String connecting = "Connecting to: ";
     delay(10);
     // We start by connecting to a WiFi network
     Serial.println();
-    Serial.print(msg);
+    Serial.print(connecting);
     Serial.println(ssid);
 
     oled.setTextSize(1);
     oled.setCursor(0,16);
-    oled.println(msg);
+    oled.println(connecting);
     oled.println(ssid);
     oled.display();
     WiFi.begin(ssid, password);
@@ -206,9 +206,18 @@ void setup_wifi()
     }
     
     Serial.println("");
-    Serial.println("WiFi connected");
-    Serial.println("IP address: ");
+    oled.println("");
+    oled.display();
+    String connectedMsg = "WiFi connected";
+    Serial.println(connectedMsg);
+    oled.println(connectedMsg);
+    String ipMsg = "IP address: ";
+    Serial.println(ipMsg);
     Serial.println(WiFi.localIP());
+    oled.println(ipMsg);
+    oled.println((WiFi.localIP()));
+    oled.display();
+    delay(2000);
 }
 
 void callback(char* topic, byte* payload, unsigned int length)
