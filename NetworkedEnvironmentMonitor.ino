@@ -15,7 +15,7 @@ MCP3008 adc(CLOCK_PIN, MOSI_PIN, MISO_PIN, CS_PIN);
 #define MQTT_PERIOD             1*LCD_PERIOD    // how often a message is published to MQTT
 
 // define ADC values
-#define MAX_ADC_READING         1024            // max num` on analog to digital converter
+#define MAX_ADC_READING         1023            // max num` on analog to digital converter
 #define ADC_REF_VOLTAGE         3.3             // max voltage that could appear on ADC in V
 
 #define DEBUG
@@ -276,8 +276,14 @@ void reconnect() {
  */
 float readAmbientTemperature()
 {
-    float thermistorVoltage = readSensor(0); 
+    float thermistorVoltage = readSensor(0);
+    #ifdef DEBUG
+    Serial.println("Temperature Voltage = " + String(thermistorVoltage));
+    #endif
     float temperature = (thermistorVoltage - 0.5)*100;    // [degrees C]
+    #ifdef DEBUG
+    Serial.println("temperature = " + String(temperature));
+    #endif
     return temperature;
 }
 
