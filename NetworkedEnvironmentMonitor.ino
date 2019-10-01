@@ -1,8 +1,11 @@
-// define pins
-#define ANALOG_IN                 A0              // Pin number for input from the multiplexer
-#define BIT_0                     0              // least significant bit
-#define BIT_1                     2              //
-#define BIT_2                     14              // most significant bit
+#include <MCP3008.h>
+// Configure MCP3008 ADC
+#define CS_PIN                      D8
+#define CLOCK_PIN                   D5
+#define MOSI_PIN                    D7
+#define MISO_PIN                    D6
+
+MCP3008 adc(CLOCK_PIN, MOSI_PIN, MISO_PIN, CS_PIN);
 
 //#define BUTTON_PIN              7               // pin number for button input
 
@@ -14,17 +17,6 @@
 // define ADC values
 #define MAX_ADC_READING         1024            // max num` on analog to digital converter
 #define ADC_REF_VOLTAGE         3.3             // max voltage that could appear on ADC in V
-#define ADC_OFFSET              31              // See comment below
-/*
- * Have to add an ADC_OFFSET because the A0 pin on the esp8266 is not as accurate as the 
- * Arduino. I found the above value by setting up a voltage divider using two 1k resistors
- * and found the sensor value for the voltage between the two. On my multimeter, it read
- * 1.65V, which is half of 3.3V. The ADC pin should have read 512 at that point, but it 
- * did not. Took the difference between the ADC pin value and 512 and set it as the offset.
- * This brought the value close enough to what the Arduino was reading.
- */
-
-#define NUM_OF_DATA              1                // how many sets of data can be sent
 
 #define DEBUG
 
@@ -32,9 +24,9 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 
-const char* ssid = "LouisTheHome";// 
-const char* password = "1nTheEventOfFireLookDirectlyAtFire";
-const char* mqtt_server = "192.168.1.10";//"192.168.1.10";
+const char* ssid = "tuguestwireless";// 
+const char* password = "";
+const char* mqtt_server = "10.33.46.65";//"192.168.1.10";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -90,17 +82,13 @@ void setup()
     // initialize pin to listen for button press
     //pinMode(BUTTON_PIN, INPUT);
 
+    /*
     //Setup MQTT
     setup_wifi();
     client.setServer(mqtt_server, 1883);
     client.setCallback(callback);
     if (!client.connected()) { reconnect(); }
-
-    // initialize the multiplexer control pins;
-    pinMode(BIT_0, OUTPUT);
-    pinMode(BIT_1, OUTPUT);
-    pinMode(BIT_2, OUTPUT);
-    
+    */
     // initial temperature reading
     float temperature = readAmbientTemperature();
     char temperature_msg[7];
@@ -127,9 +115,10 @@ void loop()
     // package data to send to serial
     //String data1 = String("ldr resistance: " + String(ldrResistance));
 
+    /*
     if (!client.connected()) { reconnect(); }
     client.loop();
-    
+    */
     currentMillis = millis();
     
     if ((currentMillis - previousMillisMQTT >= MQTT_PERIOD))
@@ -138,13 +127,13 @@ void loop()
         float temperature = readAmbientTemperature();
         char temperature_msg[7];
         sprintf(temperature_msg, "%.2f", temperature);
-        publishData(topic0, temperature_msg);
+        //publishData(topic0, temperature_msg);
         
         // Get light level reading
         double lightLevel = readLightLevel();
         char lightLevel_msg[7];
         sprintf(lightLevel_msg, "%.2f", lightLevel);
-        publishData(topic1, lightLevel_msg);
+        //publishData(topic1, lightLevel_msg);
         
         previousMillisMQTT = currentMillis;
         printDataToOLED(temperature);
@@ -287,7 +276,7 @@ void reconnect() {
  */
 float readAmbientTemperature()
 {
-    float thermistorVoltage = readSensor(0); // select pin 0 on cd4051b 
+    float thermistorVoltage = readSensor(0); 
     float temperature = (thermistorVoltage - 0.5)*100;    // [degrees C]
     return temperature;
 }
@@ -302,35 +291,19 @@ double readLightLevel()
     return ldrResistance;
 }
 
-float readSensor(int input)
+float readSensor(int channelNum)
 {   
-    // select analog input on the cd4051b
-    switch(input)
-    {
-        case 0:
-            selectMultiplexerChannel(0);
-            break;
-        case 1:
-            selectMultiplexerChannel(1);
-            break;
-    }
-    delay(1); // debounce time
     int sum = 0;
     int numOfSensorReads = 10;
-    for (int i = 0; i< numOfSensorReads ; i++) { sum += analogRead(ANALOG_IN) - ADC_OFFSET; }
+    for (int i = 0; i< numOfSensorReads ; i++) { 
+        sum += adc.readADC(channelNum); 
+        delay(100);}
     int sensorVal = sum / numOfSensorReads;
     #ifdef DEBUG
     Serial.println("sensorVal = " + String(sensorVal));
     #endif
     float voltage = ( (float)sensorVal / MAX_ADC_READING ) * ADC_REF_VOLTAGE;   // [V]
     return voltage;
-}
-
-void selectMultiplexerChannel(int input)
-{
-    digitalWrite(BIT_0, bitRead(input, 0));
-    digitalWrite(BIT_1, bitRead(input, 1));
-    digitalWrite(BIT_2, bitRead(input, 2));
 }
 
 void publishData(const char* topic, const char* msg)
