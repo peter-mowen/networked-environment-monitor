@@ -1,51 +1,53 @@
-#include <MCP3008.h>
-// Configure MCP3008 ADC
-#define CS_PIN                      D8
-#define CLOCK_PIN                   D5
-#define MOSI_PIN                    D7
-#define MISO_PIN                    D6
 
+// Uncomment different ones to show different debug messages
+//#define DEBUG_SENSOR            // print sensor's ADC value to serial
+//#define DEBUG_TEMPERATURE       // print temperature sensor voltage and calculated temperature to serial
+
+/* Configure pins for MCP3008 ADC  */
+#include <MCP3008.h>
+#define CS_PIN      D8
+#define CLOCK_PIN   D5
+#define MOSI_PIN    D7
+#define MISO_PIN    D6
+// initialize adc object
 MCP3008 adc(CLOCK_PIN, MOSI_PIN, MISO_PIN, CS_PIN);
 
-//#define BUTTON_PIN              7               // pin number for button input
+/* define timer values */
+#define MQTT_PERIOD 1000            // how often a message is published to MQTT
 
-// define timer values
-#define LCD_TIMEOUT             5000            // milliseconds until screen turns off
-#define LCD_PERIOD              1000            // in milliseconds
-#define MQTT_PERIOD             1*LCD_PERIOD    // how often a message is published to MQTT
+/* define ADC constants */
+#define MAX_ADC_READING 1023        // max num` on analog to digital converter
+#define ADC_REF_VOLTAGE 3.3         // max voltage that could appear on ADC in V
 
-// define ADC values
-#define MAX_ADC_READING         1023            // max num` on analog to digital converter
-#define ADC_REF_VOLTAGE         3.3             // max voltage that could appear on ADC in V
-
-#define DEBUG
-
-//PubSub Stuff
+/* Configure PubSub */
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 
-const char* ssid = "tuguestwireless";// 
+// set wifi ssid, password, and the ip address of the mqtt broker
+const char* ssid = "tuguestwireless";
 const char* password = "";
-const char* mqtt_server = "10.33.46.65";//"192.168.1.10";
+const char* mqtt_server = "10.33.46.65";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
-const char* clientID = "Peter's BR";
+
+const char* clientID = "RM_MNTR 01";
 const char* topic0 = "24/temperature";
 const char* topic1 = "24/light level";
 
-// OLED libraries and constants
-#include <ArducamSSD1306.h>    // Modification of Adafruit_SSD1306 for ESP8266 compatibility
+/* OLED libraries and constants. Copy/pasted from example code */
+#include <ArducamSSD1306.h> // Modification of Adafruit_SSD1306 for ESP8266 compatibility
 #include <Adafruit_GFX.h>   // Needs a little change in original Adafruit library (See README.txt file)
 #include <Wire.h>           // For I2C comm, but needed for not getting compile error
 
-#define OLED_RESET  16  // Pin 15 -RESET digital signal
+#define OLED_RESET  16      // Pin 15 -RESET digital signal
 
 #define LOGO16_GLCD_HEIGHT 16
 #define LOGO16_GLCD_WIDTH  16
 
 ArducamSSD1306 oled(OLED_RESET); // FOR I2C
 
+// Byte array to print the degree symbol to the OLED
 byte degreeSymbol[8] = {
     B01111,
     B01001,
@@ -57,71 +59,67 @@ byte degreeSymbol[8] = {
     B00000,
 };
 
-// Global Variables
-unsigned long previousMillisMQTT;
-unsigned long currentMillis;
+/* Global Variables */
+unsigned long previousPublishMillis;   // previous millis used to control when MQTT is sent
+unsigned long currentMillis;        // current millis
 
-unsigned long startMillisLCD;
-
-int currentButtonState = 0;
-int previousButtonState = 0;
-
+/**
+ * setup()
+ *  Configure serial, screen, and wifi. Take intial temperature reading.
+ */
 void setup()
 {
-    // Open Serial port. Set Baud rate to 115200
+    // Open Serial port
     Serial.begin(115200);
     // Send out startup phrase
     Serial.println("Arduino Starting Up...");
     
-    // SSD1306 Init
+    // Setup display
     oled.begin();  // Switch OLED
     oled.clearDisplay();
     
     //Set text size, color, and position
     clearAndUpdateTitle("Starting");
-    // initialize pin to listen for button press
-    //pinMode(BUTTON_PIN, INPUT);
 
     /*
-    //Setup MQTT
+    // Setup wifi
     setup_wifi();
+    // Setup MQTT
     client.setServer(mqtt_server, 1883);
     client.setCallback(callback);
     if (!client.connected()) { reconnect(); }
     */
-    // initial temperature reading
+    // Take initial temperature reading
     float temperature = readAmbientTemperature();
     char temperature_msg[7];
     sprintf(temperature_msg, "%.2f", temperature);
 
-    // initial light level reading
-    double lightLevel = readLightLevel();
-    char lightLevel_msg[7];
-    sprintf(lightLevel_msg, "%.2f", lightLevel);
-    
-    publishData(topic0, temperature_msg);
-    publishData(topic1, lightLevel_msg);
-    previousMillisMQTT = millis();  // initial start time
+    // Publish initial readings to MQTT
+    //publishData(topic0, temperature_msg);
 
+    // Set Initial start time 
+    previousPublishMillis = millis();  // initial start time
+    /* 
+     * TODO: Get the name of the room from the mqtt broker 
+     *  based on the clientID to set as the device title
+     */
     clearAndUpdateTitle(clientID);
     printDataToOLED(temperature);
-    //delay(LCD_TIMEOUT);
-    //turnOffLCD();
 }
 
+/**
+ * Check if connected to wifi and reconnect if not.
+ * Check sensors and send results to MQTT broker and screen.
+ */
 void loop()
 {
-    //double ldrResistance = readLightLevel();
-    // package data to send to serial
-    //String data1 = String("ldr resistance: " + String(ldrResistance));
-
     /*
     if (!client.connected()) { reconnect(); }
     client.loop();
     */
     currentMillis = millis();
     
-    if ((currentMillis - previousMillisMQTT >= MQTT_PERIOD))
+    if ((currentMillis - previousPublishMillis >= MQTT_PERIOD))
     {
         // Get temperature reading
         float temperature = readAmbientTemperature();
@@ -129,60 +127,38 @@ void loop()
         sprintf(temperature_msg, "%.2f", temperature);
         //publishData(topic0, temperature_msg);
         
-        // Get light level reading
-        double lightLevel = readLightLevel();
-        char lightLevel_msg[7];
-        sprintf(lightLevel_msg, "%.2f", lightLevel);
-        //publishData(topic1, lightLevel_msg);
-        
-        previousMillisMQTT = currentMillis;
+        previousPublishMillis = currentMillis;
         printDataToOLED(temperature);
     }
-    
-    /* TODO: move this to its own function
-    currentButtonState = digitalRead(BUTTON_PIN);
-    //Serial.println(String(currentButtonState));
-    //Serial.println(String(currentButtonState) + " " + String(previousButtonState));
-    if ((currentButtonState == HIGH)&&(previousButtonState == LOW))
-    {
-        previousButtonState = currentButtonState;
-        digitalWrite(LCD_POWER_PIN, HIGH);
-        printDataToOLED(temperature);
-        startMillisLCD = millis();  // initial start time
-    } else if ((currentButtonState == LOW)&&(previousButtonState == HIGH))
-    {
-        //Serial.println(String(currentMillis - startMillisLCD));
-        if (currentMillis - startMillisLCD >= LCD_TIMEOUT)
-        {
-              turnOffLCD();
-              startMillisLCD = millis();
-              previousButtonState = currentButtonState;
-        }
-    }
-    */
 }
 
-/*
- * MQTT Functions
+/**
+ * Code from the pubsubclient esp8266 example that connects to the wifi network.
+ *  I added code to print output to the screen in addition to the serial port
+ *  and added a max attempts before erroring out.
  */
 void setup_wifi() 
 {
     String connecting = "Connecting to: ";
     delay(10);
-    // We start by connecting to a WiFi network
     Serial.println();
     Serial.print(connecting);
     Serial.println(ssid);
 
+    // Setup Screen for printing wifi info
     oled.setTextSize(1);
     oled.setCursor(0,16);
+    
+    // Print message to screen
     oled.println(connecting);
     oled.println(ssid);
     oled.display();
+
+    // We start by connecting to a WiFi network
     WiFi.begin(ssid, password);
 
-    int attempts = 0;
-    int maxAttempts = 20;
+    int attempts = 0;       // intialize number of attempts
+    int maxAttempts = 20;   // max attempts until erroring out
     while (WiFi.status() != WL_CONNECTED) 
     {
         delay(500);
@@ -193,25 +169,36 @@ void setup_wifi()
         if (attempts == maxAttempts)
         {
             String failedConnectMsg = "Failed to connect to WiFi network!";
-            haltOnError(failedConnectMsg);
+            haltOnError(failedConnectMsg);  // error out and print error to screen
         }
     }
     
     Serial.println("");
     oled.println("");
     oled.display();
+    // Convey success message to serial and screen
     String connectedMsg = "WiFi connected";
     Serial.println(connectedMsg);
     oled.println(connectedMsg);
+    // Print IP address to serial and screen
     String ipMsg = "IP address: ";
     Serial.println(ipMsg);
     Serial.println(WiFi.localIP());
     oled.println(ipMsg);
     oled.println((WiFi.localIP()));
     oled.display();
-    delay(2000);
+    delay(2000); // wait before moving on so user has time to read the info
 }
 
+/**
+ * Called when a new message arrives. Copied from pubsubclient for esp8266.
+ *  Function parameter descriptions pulled from pubsubclient documentation site:
+ *  https://pubsubclient.knolleary.net/api.html#callback
+ *  
+ *  \param[in]  the topic the message arrived on (const char[])
+ *  \param[in]  the message payload (byte array)
+ *  \param[in]  the length of the message payload (unsigned int)
+ */
 void callback(char* topic, byte* payload, unsigned int length)
 {
     Serial.print("Message arrived [");
@@ -221,13 +208,19 @@ void callback(char* topic, byte* payload, unsigned int length)
     Serial.println();
 }
 
+/**
+ * Code from the pubsubclient esp8266 example that reconnects to the wifi network.
+ *  I added code to print output to the screen in addition to the serial port
+ */
 void reconnect() {
-    // Loop until we're reconnected
+    // Reset bottom portion of screen to black to start printing new info
     oled.fillRect(0,16,127,127, BLACK);
     oled.setTextSize(1);
     oled.setCursor(0,16);
-    int attempt = 0;
-    int maxAttempts = 2;
+    
+    int attempt = 0;        // initialize number of attempts
+    int maxAttempts = 2;    // set max attempts
+    // Loop until connected or max attempts is reached
     while (!client.connected()) {
         attempt++;
         Serial.println("Attempting to connect to MQTT broker at:");
@@ -244,7 +237,7 @@ void reconnect() {
             Serial.println("connected");
             oled.println("connected");
             oled.display();
-            delay(2000);
+            delay(2000);    // wait so user can read screen
             // Once connected, publish an announcement...
             const char* heartbeat = "heartbeat";
             client.publish( heartbeat, clientID);
@@ -256,7 +249,7 @@ void reconnect() {
             {
                 haltOnError("Failed to connect to MQTT broker after " 
                 + String(maxAttempts) + "  attempts. Reason:\n\n" 
-                + "  failed, rc= " + String(client.state()));
+                + "  failed, rc= " + String(client.state())); // error out and print error to screen
             } 
             else 
             {
@@ -271,47 +264,14 @@ void reconnect() {
     }
 }
 
-/*
- * Environment Monitor Functions
+/**
+ * Publish data to MQTT broker. Taken from pubsubclient esp8266 example.
+ *  Input list descriptions pulled from pubsubclient documentation site:
+ *  https://pubsubclient.knolleary.net/api.html#publish1
+ *  
+ * \param[in]   topic - the topic to publish to (const char[])
+ * \param[in]   msg - the message to publish (const char[])
  */
-float readAmbientTemperature()
-{
-    float thermistorVoltage = readSensor(0);
-    #ifdef DEBUG
-    Serial.println("Temperature Voltage = " + String(thermistorVoltage));
-    #endif
-    float temperature = (thermistorVoltage - 0.5)*100;    // [degrees C]
-    #ifdef DEBUG
-    Serial.println("temperature = " + String(temperature));
-    #endif
-    return temperature;
-}
-
-
-
-double readLightLevel()
-{
-    double resistorVoltage = readSensor(1);   // [V]
-    double ldrVoltage = MAX_ADC_READING - resistorVoltage;
-    double ldrResistance = (ldrVoltage/resistorVoltage)*10000; //10k is resistor value
-    return ldrResistance;
-}
-
-float readSensor(int channelNum)
-{   
-    int sum = 0;
-    int numOfSensorReads = 10;
-    for (int i = 0; i< numOfSensorReads ; i++) { 
-        sum += adc.readADC(channelNum); 
-        delay(100);}
-    int sensorVal = sum / numOfSensorReads;
-    #ifdef DEBUG
-    Serial.println("sensorVal = " + String(sensorVal));
-    #endif
-    float voltage = ( (float)sensorVal / MAX_ADC_READING ) * ADC_REF_VOLTAGE;   // [V]
-    return voltage;
-}
-
 void publishData(const char* topic, const char* msg)
 {
     client.publish(topic, msg);
@@ -320,53 +280,55 @@ void publishData(const char* topic, const char* msg)
     #endif
 }
 
-void printDataToOLED(float temperature)
+/**
+ * Read thermistor and convert voltage to temperature in degrees celsius
+ *  \return temperature in degrees celsius
+ */
+float readAmbientTemperature()
 {
-    int roundedTemp = temperature + 0.5;
-    String displayTemp = "Temp: "+ String(roundedTemp);
-
-    // Update OLED display
-    clearBody(); // sets cursor to begining of body
-    oled.setTextSize(2);
-    oled.print(displayTemp);
-    oled.drawBitmap(displayTemp.length()*12, 16, degreeSymbol, 8, 8, WHITE);
-    oled.println(" C");
-    oled.display();
-    /*    
-    lcd.setCursor(0,1);
-
-    double ldrDouble = ldrResistance;
+    float thermistorVoltage = readSensor(0);
     
-    String prefix = " ";
-    if (ldrResistance > 1000000)
-    {
-        ldrDouble = (ldrResistance) / 1000000.0;
-        prefix = String("M");
-    } else if (ldrResistance > 1000)
-    {
-        ldrDouble = (ldrResistance) / 1000.0;
-        prefix = String("k");
-    } else if (ldrResistance < 0)
-    {
-        prefix = "OL";
-    }
-    //Serial.println(prefix);
-    if (prefix.equals("OL"))
-    {
-        lcd.print(String("LDR: INF"));
-        lcd.write(byte(1));
-    } else if (!prefix.equals(" "))
-    {
-        lcd.print(String(String("LDR: ")  + String(ldrDouble, 2) + prefix));
-        lcd.write(byte(1));
-    } else
-    {
-        lcd.print(String(String("LDR: ")  + String(ldrDouble, 2)));
-        lcd.write(byte(1));
-    }
-    */
+    #ifdef DEBUG_TEMPERATURE
+    Serial.println("Temperature Voltage = " + String(thermistorVoltage));
+    #endif
+    
+    float temperature = (thermistorVoltage - 0.5)*100;    // [degrees C]
+    
+    #ifdef DEBUG_TEMPERATURE
+    Serial.println("temperature = " + String(temperature));
+    #endif
+    
+    return temperature;
 }
 
+/**
+ * Reads the sensor value from the MCP3008 and converts it into a voltage
+ *  
+ *  \param[in]  channelNum - Channel number on MCP3308 to read
+ *  
+ *  \return voltage
+ */
+float readSensor(int channelNum)
+{   
+    int sum = 0;
+    int numOfSensorReads = 10;
+    for (int i = 0; i< numOfSensorReads ; i++) { 
+        sum += adc.readADC(channelNum); 
+        delay(100);}
+    int sensorVal = sum / numOfSensorReads;
+    #ifdef DEBUG_SENSOR
+    Serial.println("sensorVal = " + String(sensorVal));
+    #endif
+    float voltage = ( (float)sensorVal / MAX_ADC_READING ) * ADC_REF_VOLTAGE;   // [V]
+    return voltage;
+}
+
+/**
+ * Print an error message to the blue part of the OLED and go into an infinite loop
+ * 
+ * \param[in] errMsg - error message to convey what caused the crash
+ * 
+ */
 void haltOnError(String errMsg)
 {
     Serial.println("");
@@ -382,10 +344,11 @@ void haltOnError(String errMsg)
     while (true) { ESP.wdtFeed(); }; // feed the watchdog and hang here forever
 }
 
-/*
- * Display control functions
+/**
+ * Clears the yellow section of the OLED and prints a new title
+ * 
+ * \param[in] title - new title to print
  */
-
  void clearAndUpdateTitle(String title)
  {
     oled.fillRect(0,0,127,16, BLACK);
@@ -396,9 +359,35 @@ void haltOnError(String errMsg)
     oled.display();
  }
 
+
+/**
+ * Writes black pixels to the blue part of the display to clear it
+ *  and sets the cursor back to the start of that section.
+ */
  void clearBody()
  {
     oled.fillRect(0,16,127,127, BLACK);
     oled.setCursor(0,16);
     
  }
+
+ /**
+ * Print data to the blue text part of the OLED display.
+ * 
+ * Right now, this only prints temperature but I might expand 
+ *  it to print other data in the future
+ *  
+ *  \param[in] temperature
+ */
+void printDataToOLED(float temperature)
+{
+    int roundedTemp = temperature + 0.5;
+    String displayTemp = "Temp: "+ String(roundedTemp);
+
+    clearBody(); // sets cursor to begining of body
+    oled.setTextSize(2);
+    oled.print(displayTemp);
+    oled.drawBitmap(displayTemp.length()*12, 16, degreeSymbol, 8, 8, WHITE);
+    oled.println(" C");
+    oled.display();
+}
