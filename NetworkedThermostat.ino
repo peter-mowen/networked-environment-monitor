@@ -1,7 +1,7 @@
-
 // Uncomment different ones to show different debug messages
-//#define DEBUG_SENSOR            // print sensor's ADC value to serial
-//#define DEBUG_TEMPERATURE       // print temperature sensor voltage and calculated temperature to serial
+#define DEBUG
+#define DEBUG_SENSOR            // print sensor's ADC value to serial
+#define DEBUG_TEMPERATURE       // print temperature sensor voltage and calculated temperature to serial
 
 /* Configure pins for MCP3008 ADC  */
 #include <MCP3008.h>
@@ -13,7 +13,7 @@
 MCP3008 adc(CLOCK_PIN, MOSI_PIN, MISO_PIN, CS_PIN);
 
 /* define timer values */
-#define MQTT_PERIOD 1000            // how often a message is published to MQTT
+#define MQTT_PERIOD 15*1000            // how often a message is published to MQTT
 
 /* define ADC constants */
 #define MAX_ADC_READING 1023        // max num` on analog to digital converter
@@ -24,16 +24,16 @@ MCP3008 adc(CLOCK_PIN, MOSI_PIN, MISO_PIN, CS_PIN);
 #include <PubSubClient.h>
 
 // set wifi ssid, password, and the ip address of the mqtt broker
-const char* ssid = "tuguestwireless";
-const char* password = "";
-const char* mqtt_server = "10.33.46.65";
+const char* ssid = "LouisTheHome";
+const char* password = "1nTheEventOfFireLookDirectlyAtFire";
+const char* mqtt_server = "192.168.1.13";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-const char* clientID = "RM_MNTR 01";
-const char* topic0 = "24/temperature";
-const char* topic1 = "24/light level";
+const char* clientID = "NEM 01";
+const char* topic0 = "NEM 01/temperature";
+const char* topic1 = "NEM 01/light level";
 
 /* OLED libraries and constants. Copy/pasted from example code */
 #include <ArducamSSD1306.h> // Modification of Adafruit_SSD1306 for ESP8266 compatibility
@@ -81,21 +81,21 @@ void setup()
     //Set text size, color, and position
     clearAndUpdateTitle("Starting");
 
-    /*
+    
     // Setup wifi
     setup_wifi();
     // Setup MQTT
     client.setServer(mqtt_server, 1883);
     client.setCallback(callback);
     if (!client.connected()) { reconnect(); }
-    */
+    
     // Take initial temperature reading
     float temperature = readAmbientTemperature();
     char temperature_msg[7];
     sprintf(temperature_msg, "%.2f", temperature);
 
     // Publish initial readings to MQTT
-    //publishData(topic0, temperature_msg);
+    publishData(topic0, temperature_msg);
 
     // Set Initial start time 
     previousPublishMillis = millis();  // initial start time
@@ -125,7 +125,7 @@ void loop()
         float temperature = readAmbientTemperature();
         char temperature_msg[7];
         sprintf(temperature_msg, "%.2f", temperature);
-        //publishData(topic0, temperature_msg);
+        publishData(topic0, temperature_msg);
         
         previousPublishMillis = currentMillis;
         printDataToOLED(temperature);
