@@ -24,9 +24,9 @@ MCP3008 adc(CLOCK_PIN, MOSI_PIN, MISO_PIN, CS_PIN);
 #include <PubSubClient.h>
 
 // set wifi ssid, password, and the ip address of the mqtt broker
-const char* ssid = "LouisTheHome";
-const char* password = "1nTheEventOfFireLookDirectlyAtFire";
-const char* mqtt_server = "192.168.1.13";
+const char* ssid = "home-automation";
+const char* password = "AutomateTheHome";
+const char* mqtt_server = "192.168.2.4";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -59,6 +59,25 @@ byte degreeSymbol[8] = {
     B00000,
 };
 
+// Byte array to print the wifi symbols to the OLED
+byte wifiSymbolL[16] = {
+    0x00, 0x0F, 0x10, 0x20, 0x40, 0x07, 0x08, 0x10, 
+    0x00, 0x03, 0x04, 0x00, 0x00, 0x01, 0x01, 0x00
+};
+byte wifiSymbolR[16] = {
+    0x00, 0xF0, 0x08, 0x04, 0x02, 0xE0, 0x10, 0x08, 
+    0x00, 0xC0, 0x20, 0x00, 0x00, 0x80, 0x80, 0x00
+};
+
+byte noWifiSymbolL[16] = {
+    0x00, 0x4F, 0x30, 0x30, 0x48, 0x07, 0x0A, 0x11, 
+    0x01, 0x03, 0x04, 0x08, 0x10, 0x21, 0x41, 0x00
+};
+byte noWifiSymbolR[16] = {
+    0x00, 0xF2, 0x0C, 0x0C, 0x12, 0xE0, 0x50, 0x88, 
+    0x80, 0xC0, 0x20, 0x10, 0x08, 0x84, 0x82, 0x00
+};
+
 /* Global Variables */
 unsigned long previousPublishMillis;   // previous millis used to control when MQTT is sent
 unsigned long currentMillis;        // current millis
@@ -79,15 +98,19 @@ void setup()
     oled.clearDisplay();
     
     //Set text size, color, and position
-    clearAndUpdateTitle("Starting");
+    oled.setTextSize(2);
+    oled.setTextColor(WHITE);
+    oled.setCursor(0, 0);
 
-    
     // Setup wifi
     setup_wifi();
-    // Setup MQTT
-    client.setServer(mqtt_server, 1883);
-    client.setCallback(callback);
-    if (!client.connected()) { reconnect(); }
+    if (WiFi.status() == WL_CONNECTED)
+    {
+        // Setup MQTT
+        client.setServer(mqtt_server, 1883);
+        client.setCallback(callback);
+        if (!client.connected()) { reconnect(); }
+    }
     
     // Take initial temperature reading
     float temperature = readAmbientTemperature();
@@ -95,15 +118,15 @@ void setup()
     sprintf(temperature_msg, "%.2f", temperature);
 
     // Publish initial readings to MQTT
-    publishData(topic0, temperature_msg);
-
+    if (client.connected()) { publishData(topic0, temperature_msg); }
+    
     // Set Initial start time 
     previousPublishMillis = millis();  // initial start time
     /* 
      * TODO: Get the name of the room from the mqtt broker 
      *  based on the clientID to set as the device title
      */
-    clearAndUpdateTitle(clientID);
+    //clearAndUpdateTitle(clientID);
     printDataToOLED(temperature);
 }
 
@@ -125,7 +148,17 @@ void loop()
         float temperature = readAmbientTemperature();
         char temperature_msg[7];
         sprintf(temperature_msg, "%.2f", temperature);
-        publishData(topic0, temperature_msg);
+
+        if (WiFi.status() == WL_CONNECTED)
+        {
+            Serial.println("Connected to network");
+            if (client.connected()) { publishData(topic0, temperature_msg); }
+        }
+        else
+        { // try to connect again
+            clearBody();
+            setup_wifi();
+        }
         
         previousPublishMillis = currentMillis;
         printDataToOLED(temperature);
@@ -137,7 +170,7 @@ void loop()
  *  I added code to print output to the screen in addition to the serial port
  *  and added a max attempts before erroring out.
  */
-void setup_wifi() 
+bool setup_wifi() 
 {
     String connecting = "Connecting to: ";
     delay(10);
@@ -169,12 +202,17 @@ void setup_wifi()
         if (attempts == maxAttempts)
         {
             String failedConnectMsg = "Failed to connect to WiFi network!";
-            haltOnError(failedConnectMsg);  // error out and print error to screen
+            oled.println();
+            oled.print(failedConnectMsg);
+            drawTwoByteSymbol(noWifiSymbolL, noWifiSymbolR, 111, 0);
+            oled.display();
+            delay(2000);
+            return false;
         }
     }
     
     Serial.println("");
-    oled.println("");
+    oled.println();
     oled.display();
     // Convey success message to serial and screen
     String connectedMsg = "WiFi connected";
@@ -186,8 +224,10 @@ void setup_wifi()
     Serial.println(WiFi.localIP());
     oled.println(ipMsg);
     oled.println((WiFi.localIP()));
+    drawTwoByteSymbol(wifiSymbolL, wifiSymbolR, 111, 0);
     oled.display();
     delay(2000); // wait before moving on so user has time to read the info
+    return true;
 }
 
 /**
@@ -390,4 +430,15 @@ void printDataToOLED(float temperature)
     oled.drawBitmap(displayTemp.length()*12, 16, degreeSymbol, 8, 8, WHITE);
     oled.println(" C");
     oled.display();
+}
+
+
+void drawTwoByteSymbol(byte* one, byte* two, int x, int y)
+{
+    // clear space where wifi symbol will be drawn
+    oled.fillRect(x,y,16,16, BLACK);
+    // draw first symbol
+    oled.drawBitmap(x,   y, one, 8, 16, WHITE);
+    // draw second symbol
+    oled.drawBitmap(x+8, y, two, 8, 16, WHITE);
 }

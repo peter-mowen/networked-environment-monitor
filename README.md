@@ -1,11 +1,11 @@
-# Networked Environment Monitor
+# Networked Thermostat
 
 ## Description
-The Networked Environment Monitor is a node in a distributed sensor network. It uses MQTT to communicate back to a central server.
+The Networked Thermostat is a node in a distributed sensor network. It uses MQTT to communicate back to a central server.
 
 This project is motivated by the fact that my the temperature in my home is controlled by the thermostat in my dining room, but I never spend time in my dining room. By placing sensor nodes throughout the house, I can write a program to control my boiler in winter and air conditioners in summer based on the temperatures of the rooms in which I actually spend time.
 
-The code to control the boiler is still forthcoming and will be in a different repository under my Home Automation project. It will be done using Node-Red flows.
+This is the code for the node that connects to the boiler. During normal operation, it will read the local temperature. If it is connected to the Wifi network, then it will query the network for the temperatures from the other rooms, calculate the average, and use that to control the boiler. If it is not connected to the Wifi network, then it will use the local temperature to control the boiler.
 
 ### Parts
 - ESP-12e: microcontroller around which everything is built
@@ -30,7 +30,6 @@ The following is a list of libraries which this sketch uses as well as a short d
 - Wire - needed for I2C communication with OLED display
 
 ## Future Updates
-- Push button to toggle display
 - Push buttons to set desired temperature
 - Battery pack and low battery alert
 - Various sensors
