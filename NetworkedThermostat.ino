@@ -2,6 +2,7 @@
 #define DEBUG
 #define DEBUG_SENSOR            // print sensor's ADC value to serial
 #define DEBUG_TEMPERATURE       // print temperature sensor voltage and calculated temperature to serial
+#define DEBUG_NETWORK
 
 /* Configure pins for MCP3008 ADC  */
 #include <MCP3008.h>
@@ -78,6 +79,30 @@ byte noWifiSymbolR[16] = {
     0x80, 0xC0, 0x20, 0x10, 0x08, 0x84, 0x82, 0x00
 };
 
+uint8_t wifiXpos = 111;
+
+byte mqttSymbolL[16] = {
+    0x00, 0x08, 0x1C, 0x2A, 0x08, 0x08, 0x08, 0x08,
+    0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x00
+};
+
+byte mqttSymbolR[16] ={
+    0x00, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10,
+    0x10, 0x10, 0x10, 0x10, 0x54, 0x38, 0x10, 0x00
+};
+
+byte NoMqttSymbolL[16] = {
+    0x80, 0x48, 0x3C, 0x3A, 0x08, 0x0C, 0x0A, 0x09,
+    0x09, 0x0A, 0x0C, 0x08, 0x18, 0x28, 0x48, 0x00
+};
+
+byte NoMqttSymbolR[16] ={
+    0x00, 0x12, 0x14, 0x18, 0x10, 0x30, 0x50, 0x90,
+    0x90, 0x50, 0x30, 0x10, 0x5C, 0x3C, 0x12, 0x00
+};
+
+uint8_t mqttXpos = 95;
+
 /* Global Variables */
 unsigned long previousPublishMillis;   // previous millis used to control when MQTT is sent
 unsigned long currentMillis;        // current millis
@@ -104,6 +129,8 @@ void setup()
 
     // Setup wifi
     setup_wifi();
+    
+    // Setup mqtt if wifi is connected
     if (WiFi.status() == WL_CONNECTED)
     {
         // Setup MQTT
@@ -151,11 +178,27 @@ void loop()
 
         if (WiFi.status() == WL_CONNECTED)
         {
+            #ifdef DEGBUG_NETWORK
             Serial.println("Connected to network");
-            if (client.connected()) { publishData(topic0, temperature_msg); }
+            #endif
+            
+            drawTwoByteSymbol(wifiSymbolL, wifiSymbolR, 111, 0);
+            // Check MQTT connection and publish if connected
+            if (client.connected())
+            { 
+                drawTwoByteSymbol(mqttSymbolL, mqttSymbolR, mqttXpos, 0);
+                publishData(topic0, temperature_msg); 
+            }
+            else 
+            { 
+                drawTwoByteSymbol(NoMqttSymbolL, NoMqttSymbolR, mqttXpos, 0);
+                reconnect(); 
+            }
         }
         else
         { // try to connect again
+            drawTwoByteSymbol(noWifiSymbolL, noWifiSymbolR, 111, 0);
+            drawTwoByteSymbol(NoMqttSymbolL, NoMqttSymbolR, mqttXpos, 0);
             clearBody();
             setup_wifi();
         }
@@ -174,10 +217,13 @@ bool setup_wifi()
 {
     String connecting = "Connecting to: ";
     delay(10);
+
+    #ifdef DEBUG_NETWORK
     Serial.println();
     Serial.print(connecting);
     Serial.println(ssid);
-
+    #endif
+    
     // Setup Screen for printing wifi info
     oled.setTextSize(1);
     oled.setCursor(0,16);
@@ -195,64 +241,78 @@ bool setup_wifi()
     while (WiFi.status() != WL_CONNECTED) 
     {
         delay(500);
+        
+        #ifdef DEBUG_NETWORK
         Serial.print(".");
+        #endif
+        
         oled.print(".");
         oled.display();
+        
         attempts++;
+        
         if (attempts == maxAttempts)
         {
             String failedConnectMsg = "Failed to connect to WiFi network!";
+            
+            #ifdef DEBUG_NETWORK
+            Serial.println(failedConnectMsg);
+            #endif
+            
             oled.println();
             oled.print(failedConnectMsg);
+            
             drawTwoByteSymbol(noWifiSymbolL, noWifiSymbolR, 111, 0);
+            
             oled.display();
+            
             delay(2000);
+            
             return false;
         }
     }
     
-    Serial.println("");
-    oled.println();
-    oled.display();
-    // Convey success message to serial and screen
+    // Convey success message
+    
     String connectedMsg = "WiFi connected";
-    Serial.println(connectedMsg);
-    oled.println(connectedMsg);
-    // Print IP address to serial and screen
     String ipMsg = "IP address: ";
+
+    #ifdef DEBUG_NETWORK
+    Serial.println("");
+    Serial.println(connectedMsg);
     Serial.println(ipMsg);
     Serial.println(WiFi.localIP());
+    #endif
+    
+    oled.println();    
+    oled.println(connectedMsg);
     oled.println(ipMsg);
     oled.println((WiFi.localIP()));
-    drawTwoByteSymbol(wifiSymbolL, wifiSymbolR, 111, 0);
+    
+    drawTwoByteSymbol(wifiSymbolL, wifiSymbolR, wifiXpos, 0);
+    
     oled.display();
+    
     delay(2000); // wait before moving on so user has time to read the info
+    
     return true;
 }
 
 /**
- * Called when a new message arrives. Copied from pubsubclient for esp8266.
- *  Function parameter descriptions pulled from pubsubclient documentation site:
- *  https://pubsubclient.knolleary.net/api.html#callback
+ * Called when a new message arrives.
  *  
  *  \param[in]  the topic the message arrived on (const char[])
  *  \param[in]  the message payload (byte array)
  *  \param[in]  the length of the message payload (unsigned int)
  */
-void callback(char* topic, byte* payload, unsigned int length)
-{
-    Serial.print("Message arrived [");
-    Serial.print(topic);
-    Serial.print("] ");
-    for (int i = 0; i < length; i++) { Serial.print((char)payload[i]); }
-    Serial.println();
-}
+void callback(char* topic, byte* payload, unsigned int length){}
 
 /**
  * Code from the pubsubclient esp8266 example that reconnects to the wifi network.
  *  I added code to print output to the screen in addition to the serial port
  */
 void reconnect() {
+    
     // Reset bottom portion of screen to black to start printing new info
     oled.fillRect(0,16,127,127, BLACK);
     oled.setTextSize(1);
@@ -260,41 +320,56 @@ void reconnect() {
     
     int attempt = 0;        // initialize number of attempts
     int maxAttempts = 2;    // set max attempts
+    
     // Loop until connected or max attempts is reached
     while (!client.connected()) {
         attempt++;
+        
+        #ifdef DEBUG
         Serial.println("Attempting to connect to MQTT broker at:");
         Serial.println(mqtt_server);
+        #endif
+        
         oled.println("Attempting to connect");
         oled.setCursor(7, 25);
         oled.println("to MQTT broker at:");
         oled.setCursor(14, 34);
         oled.println(mqtt_server);
         oled.display();
+        
         // Attempt to connect
         if (client.connect(clientID))
         {
+            #ifdef DEBUG_NETWORK
             Serial.println("connected");
+            #endif
+            
             oled.println("connected");
+            
+            drawTwoByteSymbol(mqttSymbolL, mqttSymbolR, mqttXpos, 0);
+            
             oled.display();
             delay(2000);    // wait so user can read screen
-            // Once connected, publish an announcement...
-            const char* heartbeat = "heartbeat";
-            client.publish( heartbeat, clientID);
-            // ... and resubscribe
-        } else 
+        } 
+        else 
         {
             String failedMQTT = "failed, rc=" + String(client.state()) + "\ntry again in 5s";
             if (attempt == maxAttempts)
             {
-                haltOnError("Failed to connect to MQTT broker after " 
-                + String(maxAttempts) + "  attempts. Reason:\n\n" 
-                + "  failed, rc= " + String(client.state())); // error out and print error to screen
+                oled.println("Failed to connect to MQTT broker");
+                delay(2000);
+                return;
             } 
             else 
             {
+                #ifdef DEBUG_NETWORK
                 Serial.println(failedMQTT);
+                #endif
+                
                 oled.println(failedMQTT);
+
+                drawTwoByteSymbol(NoMqttSymbolL, NoMqttSymbolR, mqttXpos, 0);
+                
                 oled.display();
                 // Wait 5 seconds before retrying
                 delay(5000);
