@@ -38,7 +38,7 @@ const char* topic1 = "NEM 01/light level";
 
 /* OLED libraries and constants. Copy/pasted from example code */
 #include <ArducamSSD1306.h> // Modification of Adafruit_SSD1306 for ESP8266 compatibility
-#include <Adafruit_GFX.h>   // Needs a little change in original Adafruit library (See README.txt file)
+#include <Adafruit_GFX.h>   // Adafruit_SSD1306 OLED header file
 #include <Wire.h>           // For I2C comm, but needed for not getting compile error
 
 #define OLED_RESET  16      // Pin 15 -RESET digital signal
@@ -176,33 +176,52 @@ void loop()
         char temperature_msg[7];
         sprintf(temperature_msg, "%.2f", temperature);
 
-        if (WiFi.status() == WL_CONNECTED)
-        {
-            #ifdef DEGBUG_NETWORK
-            Serial.println("Connected to network");
-            #endif
-            
-            drawTwoByteSymbol(wifiSymbolL, wifiSymbolR, 111, 0);
-            // Check MQTT connection and publish if connected
-            if (client.connected())
-            { 
-                drawTwoByteSymbol(mqttSymbolL, mqttSymbolR, mqttXpos, 0);
-                publishData(topic0, temperature_msg); 
-            }
-            else 
-            { 
-                drawTwoByteSymbol(NoMqttSymbolL, NoMqttSymbolR, mqttXpos, 0);
-                reconnect(); 
-            }
+        // Check MQTT connection
+        if (client.connected())
+        {   // we're connected. yay.
+            drawTwoByteSymbol(mqttSymbolL, mqttSymbolR, mqttXpos, 0);
+
+            // Publish temperature
+            publishData(topic0, temperature_msg);
+
+            // Request the boiler status from mqtt broker and toggle based on that
         }
         else
-        { // try to connect again
-            drawTwoByteSymbol(noWifiSymbolL, noWifiSymbolR, 111, 0);
+        {   // something is wrong. we're not connected to the mqtt broker      
+            
             drawTwoByteSymbol(NoMqttSymbolL, NoMqttSymbolR, mqttXpos, 0);
-            clearBody();
-            setup_wifi();
+
+            // Not connected so control boiler based on local temp this pass.
+
+            // Then try to connect to the network again in prepartion for next time
+            
+            // Let's check the wifi connection
+            if (WiFi.status() == WL_CONNECTED)
+            {   // we are connected to wifi but not mqtt broker
+                #ifdef DEGBUG_NETWORK
+                Serial.println("Connected to network but not mqtt broker");
+                #endif
+            
+                drawTwoByteSymbol(wifiSymbolL, wifiSymbolR, 111, 0);
+
+                // Try reconnecting to the mqtt broker
+                reconnect();
+            }
+            else 
+            {   // we're not connected to wifi. can't get to the broker with it!
+
+                #ifdef DEGBUG_NETWORK
+                Serial.println("Not connect to wifi and not connected to mqtt broker");
+                #endif
+                
+                drawTwoByteSymbol(noWifiSymbolL, noWifiSymbolR, 111, 0);
+
+                // Let's try connecting to wifi again
+                setup_wifi();
+            }
         }
-        
+
+        // Network connectivity doesn't matter for stuff beyond this point
         previousPublishMillis = currentMillis;
         printDataToOLED(temperature);
     }
@@ -215,6 +234,7 @@ void loop()
  */
 bool setup_wifi() 
 {
+    clearBody();
     String connecting = "Connecting to: ";
     delay(10);
 
@@ -353,7 +373,7 @@ void reconnect() {
         } 
         else 
         {
-            String failedMQTT = "failed, rc=" + String(client.state()) + "\ntry again in 5s";
+            String failedMQTT = "failed, rc=" + String(client.state());
             if (attempt == maxAttempts)
             {
                 oled.println("Failed to connect to MQTT broker");
