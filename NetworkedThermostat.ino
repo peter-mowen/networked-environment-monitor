@@ -137,6 +137,9 @@ void setup()
         client.setServer(mqtt_server, 1883);
         client.setCallback(callback);
         if (!client.connected()) { reconnect(); }
+    } else
+    { // not connected to wifi so we can't connect to MQTT broker
+        drawTwoByteSymbol(NoMqttSymbolL, NoMqttSymbolR, mqttXpos, 0);
     }
     
     // Take initial temperature reading
