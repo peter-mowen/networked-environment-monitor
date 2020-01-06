@@ -14,7 +14,7 @@
 MCP3008 adc(CLOCK_PIN, MOSI_PIN, MISO_PIN, CS_PIN);
 
 /* define timer values */
-#define MQTT_PERIOD 15*1000            // how often a message is published to MQTT
+#define MQTT_PERIOD 1000            // how often a message is published to MQTT
 
 /* define ADC constants */
 #define MAX_ADC_READING 1023        // max num` on analog to digital converter
@@ -107,128 +107,11 @@ uint8_t mqttXpos = 95;
 unsigned long previousPublishMillis;   // previous millis used to control when MQTT is sent
 unsigned long currentMillis;        // current millis
 
-/**
- * setup()
- *  Configure serial, screen, and wifi. Take intial temperature reading.
- */
-void setup()
-{
-    // Open Serial port
-    Serial.begin(115200);
-    // Send out startup phrase
-    Serial.println("Arduino Starting Up...");
-    
-    // Setup display
-    oled.begin();  // Switch OLED
-    oled.clearDisplay();
-    
-    //Set text size, color, and position
-    oled.setTextSize(2);
-    oled.setTextColor(WHITE);
-    oled.setCursor(0, 0);
+float desiredTemp = 28;           // temperature we're shooting for
+float upperBound= 3;                // upper bound on temperature tolerance
+float lowerBound = 0.5;             // lower bound on temperature tolerance
 
-    // Setup wifi
-    setup_wifi();
-    
-    // Setup mqtt if wifi is connected
-    if (WiFi.status() == WL_CONNECTED)
-    {
-        // Setup MQTT
-        client.setServer(mqtt_server, 1883);
-        client.setCallback(callback);
-        if (!client.connected()) { reconnect(); }
-    } else
-    { // not connected to wifi so we can't connect to MQTT broker
-        drawTwoByteSymbol(NoMqttSymbolL, NoMqttSymbolR, mqttXpos, 0);
-    }
-    
-    // Take initial temperature reading
-    float temperature = readAmbientTemperature();
-    char temperature_msg[7];
-    sprintf(temperature_msg, "%.2f", temperature);
-
-    // Publish initial readings to MQTT
-    if (client.connected()) { publishData(topic0, temperature_msg); }
-    
-    // Set Initial start time 
-    previousPublishMillis = millis();  // initial start time
-    /* 
-     * TODO: Get the name of the room from the mqtt broker 
-     *  based on the clientID to set as the device title
-     */
-    //clearAndUpdateTitle(clientID);
-    printDataToOLED(temperature);
-}
-
-/**
- * Check if connected to wifi and reconnect if not.
- * Check sensors and send results to MQTT broker and screen.
- */
-void loop()
-{
-    /*
-    if (!client.connected()) { reconnect(); }
-    client.loop();
-    */
-    currentMillis = millis();
-    
-    if ((currentMillis - previousPublishMillis >= MQTT_PERIOD))
-    {
-        // Get temperature reading
-        float temperature = readAmbientTemperature();
-        char temperature_msg[7];
-        sprintf(temperature_msg, "%.2f", temperature);
-
-        // Check MQTT connection
-        if (client.connected())
-        {   // we're connected. yay.
-            drawTwoByteSymbol(mqttSymbolL, mqttSymbolR, mqttXpos, 0);
-
-            // Publish temperature
-            publishData(topic0, temperature_msg);
-
-            // Request the boiler status from mqtt broker and toggle based on that
-        }
-        else
-        {   // something is wrong. we're not connected to the mqtt broker      
-            
-            drawTwoByteSymbol(NoMqttSymbolL, NoMqttSymbolR, mqttXpos, 0);
-
-            // Not connected so control boiler based on local temp this pass.
-
-            // Then try to connect to the network again in prepartion for next time
-            
-            // Let's check the wifi connection
-            if (WiFi.status() == WL_CONNECTED)
-            {   // we are connected to wifi but not mqtt broker
-                #ifdef DEGBUG_NETWORK
-                Serial.println("Connected to network but not mqtt broker");
-                #endif
-            
-                drawTwoByteSymbol(wifiSymbolL, wifiSymbolR, 111, 0);
-
-                // Try reconnecting to the mqtt broker
-                reconnect();
-            }
-            else 
-            {   // we're not connected to wifi. can't get to the broker with it!
-
-                #ifdef DEGBUG_NETWORK
-                Serial.println("Not connect to wifi and not connected to mqtt broker");
-                #endif
-                
-                drawTwoByteSymbol(noWifiSymbolL, noWifiSymbolR, 111, 0);
-
-                // Let's try connecting to wifi again
-                setup_wifi();
-            }
-        }
-
-        // Network connectivity doesn't matter for stuff beyond this point
-        previousPublishMillis = currentMillis;
-        printDataToOLED(temperature);
-    }
-}
+#define relayPin D3                // pin the controls relay that controls boiler
 
 /**
  * Code from the pubsubclient esp8266 example that connects to the wifi network.
@@ -530,13 +413,157 @@ void printDataToOLED(float temperature)
     oled.display();
 }
 
-
-void drawTwoByteSymbol(byte* one, byte* two, int x, int y)
+/** Draw a two byte image to OLED
+ *  
+ *  \param[in] one - left byte of character to be drawn
+ *  \para,[in] two - right byte of character to be drawn
+ * 
+ */
+void drawTwoByteSymbol(byte* left, byte* right, int x, int y)
 {
     // clear space where wifi symbol will be drawn
     oled.fillRect(x,y,16,16, BLACK);
     // draw first symbol
-    oled.drawBitmap(x,   y, one, 8, 16, WHITE);
+    oled.drawBitmap(x,   y, left, 8, 16, WHITE);
     // draw second symbol
-    oled.drawBitmap(x+8, y, two, 8, 16, WHITE);
+    oled.drawBitmap(x+8, y, right, 8, 16, WHITE);
+}
+
+/**
+ * Toggle boiler based on inputTemp, desiredTemp, and the 
+ *  upper and lower bounds aroundt he desiredTemp
+ * 
+ * \param(in) inputTemper - temperature to compare to desired to
+ */
+void setBoiler(float inputTemp)
+{
+    if (inputTemp < desiredTemp - lowerBound) { digitalWrite(relayPin, HIGH); }
+    else if (inputTemp > desiredTemp + upperBound) { digitalWrite(relayPin, LOW); }
+}
+
+
+/**
+ * setup()
+ *  Configure serial, screen, and wifi. Take intial temperature reading.
+ */
+void setup()
+{
+    #ifdef DEBUG
+    // Open Serial port
+    Serial.begin(115200);
+    // Send out startup phrase
+    Serial.println("Arduino Starting Up...");
+    #endif
+
+    // Make relayPin an output and make sure it's LOW
+    pinMode(relayPin, OUTPUT);
+    digitalWrite(relayPin, LOW);
+    
+    // Setup display
+    oled.begin();  // Switch OLED
+    oled.clearDisplay();
+    
+    //Set text size, color, and position
+    oled.setTextSize(2);
+    oled.setTextColor(WHITE);
+    oled.setCursor(0, 0);
+
+    // Setup wifi
+    setup_wifi();
+    
+    // Setup mqtt if wifi is connected
+    if (WiFi.status() == WL_CONNECTED)
+    {
+        // Setup MQTT
+        client.setServer(mqtt_server, 1883);
+        client.setCallback(callback);
+        if (!client.connected()) { reconnect(); }
+    } else
+    { // not connected to wifi so we can't connect to MQTT broker
+        drawTwoByteSymbol(NoMqttSymbolL, NoMqttSymbolR, mqttXpos, 0);
+    }
+    
+    // Take initial temperature reading
+    float temperature = readAmbientTemperature();
+    char temperature_msg[7];
+    sprintf(temperature_msg, "%.2f", temperature);
+
+    // Publish initial readings to MQTT
+    if (client.connected()) { publishData(topic0, temperature_msg); }
+    
+    // Set Initial start time 
+    previousPublishMillis = millis();  // initial start time
+
+    printDataToOLED(temperature);
+}
+
+/**
+ * Check if connected to wifi and reconnect if not.
+ * Check sensors and send results to MQTT broker and screen.
+ */
+void loop()
+{
+    /*
+    if (!client.connected()) { reconnect(); }
+    client.loop();
+    */
+    currentMillis = millis();
+    
+    if ((currentMillis - previousPublishMillis >= MQTT_PERIOD))
+    {
+        // Get temperature reading
+        float temperature = readAmbientTemperature();
+        char temperature_msg[7];
+        sprintf(temperature_msg, "%.2f", temperature);
+
+        // Check MQTT connection
+        if (client.connected())
+        {   // we're connected. yay.
+            drawTwoByteSymbol(mqttSymbolL, mqttSymbolR, mqttXpos, 0);
+
+            // Publish temperature
+            publishData(topic0, temperature_msg);
+
+            // Request the boiler status from mqtt broker and toggle based on that
+        }
+        else
+        {   // something is wrong. we're not connected to the mqtt broker      
+            
+            drawTwoByteSymbol(NoMqttSymbolL, NoMqttSymbolR, mqttXpos, 0);
+
+            // Not connected so control boiler based on local temp this pass.
+            setBoiler(temperature);
+
+            // Then try to connect to the network again in prepartion for next time
+            
+            // Let's check the wifi connection
+            if (WiFi.status() == WL_CONNECTED)
+            {   // we are connected to wifi but not mqtt broker
+                #ifdef DEGBUG_NETWORK
+                Serial.println("Connected to network but not mqtt broker");
+                #endif
+            
+                drawTwoByteSymbol(wifiSymbolL, wifiSymbolR, 111, 0);
+
+                // Try reconnecting to the mqtt broker
+                //reconnect();
+            }
+            else 
+            {   // we're not connected to wifi. can't get to the broker with it!
+
+                #ifdef DEGBUG_NETWORK
+                Serial.println("Not connect to wifi and not connected to mqtt broker");
+                #endif
+                
+                drawTwoByteSymbol(noWifiSymbolL, noWifiSymbolR, 111, 0);
+
+                // Let's try connecting to wifi again
+                //setup_wifi();
+            }
+        }
+
+        // Network connectivity doesn't matter for stuff beyond this point
+        previousPublishMillis = currentMillis;
+        printDataToOLED(temperature);
+    }
 }
