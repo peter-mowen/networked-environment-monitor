@@ -18,7 +18,7 @@
 // set wifi ssid, password, and the ip address of the mqtt broker
 const char* ssid = "home-automation";
 const char* password = "AutomateTheHome";
-const char* mqtt_server = "192.168.2.4";
+const char* mqtt_server = "192.168.2.201";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -110,12 +110,15 @@ uint8_t mqttXpos = 95;
 unsigned long previousPublishMillis;   // previous millis used to control when MQTT is sent
 unsigned long currentMillis;        // current millis
 
-float desiredTemp = 20;           // temperature we're shooting for
-float upperBound= 3;                // upper bound on temperature tolerance
-float lowerBound = 0.5;             // lower bound on temperature tolerance
+float lastSetTemp = 18;             // last temperature that was set (C)
+float currentSetTemp = 18;          // current temperature this is set (C)
+float upperBound= 3;                // upper bound on temperature tolerance (C)
+float lowerBound = 0.5;             // lower bound on temperature tolerance (C)
 
-#define relayPin D3                // pin the controls relay that controls boiler
-
+#define relayPin D3                 // pin the controls relay that controls boiler
+#define upPin D6                    // pin for "up" on temperature select
+#define downPin D5                  // pin for "down" on temperature select
+#define debounceTime    10          // 10 ms for debounce
 /**
  * Code from the pubsubclient esp8266 example that connects to the wifi network.
  *  I added code to print output to the screen in addition to the serial port
@@ -384,15 +387,25 @@ float readAmbientTemperature()
  *  
  *  \param[in] temperature
  */
-void printDataToOLED(float temperature)
+void printTempToOLED(float temperature, uint8_t location)
 {
     int roundedTemp = temperature + 0.5;
-    String displayTemp = "Temp: "+ String(roundedTemp);
 
-    clearBody(); // sets cursor to begining of body
+    // Default things to print
+    String displayTemp = "Temp:" + String(roundedTemp);
+    uint8_t pos = 16;
+    
+    if (location == 1)
+    {
+        displayTemp = "Set: "+ String(roundedTemp);
+        pos = 32;
+    }
+
+    oled.fillRect(displayTemp.length()*12-32, pos, 32, 16, BLACK);
+    oled.setCursor(0, pos);
     oled.setTextSize(2);
     oled.print(displayTemp);
-    oled.drawBitmap(displayTemp.length()*12, 16, degreeSymbol, 8, 8, WHITE);
+    oled.drawBitmap(displayTemp.length()*12, pos, degreeSymbol, 8, 8, WHITE);
     oled.println(" C");
     oled.display();
 }
@@ -421,10 +434,9 @@ void drawTwoByteSymbol(byte* left, byte* right, int x, int y)
  */
 void setBoiler(float inputTemp)
 {
-    if (inputTemp < desiredTemp - lowerBound) { digitalWrite(relayPin, HIGH); }
-    else if (inputTemp > desiredTemp + upperBound) { digitalWrite(relayPin, LOW); }
+    if (inputTemp < currentSetTemp - lowerBound) { digitalWrite(relayPin, HIGH); }
+    else if (inputTemp > currentSetTemp + upperBound) { digitalWrite(relayPin, LOW); }
 }
-
 
 /**
  * setup()
@@ -477,7 +489,7 @@ void setup()
     // Take initial temperature reading
     float temperature = readAmbientTemperature();
     char temperature_msg[7];
-    sprintf(temperature_msg, "%.2f", temperature);
+    sprintf(temperature_msg, "%.1f", temperature);
 
     // Publish initial readings to MQTT
     if (client.connected()) { publishData(topic0, temperature_msg); }
@@ -485,8 +497,11 @@ void setup()
     // Set Initial start time 
     previousPublishMillis = millis();  // initial start time
 
-    printDataToOLED(temperature);
+    clearBody();
+    printTempToOLED(temperature, 0);
+    printTempToOLED(currentSetTemp, 1);
 }
+
 
 /**
  * Check if connected to wifi and reconnect if not.
@@ -505,7 +520,7 @@ void loop()
         // Get temperature reading
         float temperature = readAmbientTemperature();
         char temperature_msg[7];
-        sprintf(temperature_msg, "%.2f", temperature);
+        sprintf(temperature_msg, "%.1f", temperature);
 
         // Check MQTT connection
         if (client.connected())
@@ -556,6 +571,10 @@ void loop()
 
         // Network connectivity doesn't matter for stuff beyond this point
         previousPublishMillis = currentMillis;
-        printDataToOLED(temperature);
+        printTempToOLED(temperature, 0);
     }
+
+
+    printTempToOLED(currentSetTemp, 1);
+    
 }
