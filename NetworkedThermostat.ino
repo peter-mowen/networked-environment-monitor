@@ -4,15 +4,6 @@
 #define DEBUG_TEMPERATURE       // print temperature sensor voltage and calculated temperature to serial
 #define DEBUG_NETWORK
 
-/* Configure pins for MCP3008 ADC  */
-#include <MCP3008.h>
-#define CS_PIN      D8
-#define CLOCK_PIN   D5
-#define MOSI_PIN    D7
-#define MISO_PIN    D6
-// initialize adc object
-MCP3008 adc(CLOCK_PIN, MOSI_PIN, MISO_PIN, CS_PIN);
-
 /* define timer values */
 #define MQTT_PERIOD 1000            // how often a message is published to MQTT
 
@@ -47,6 +38,8 @@ const char* topic1 = "NEM 01/light level";
 #define LOGO16_GLCD_WIDTH  16
 
 ArducamSSD1306 oled(OLED_RESET); // FOR I2C
+
+#define si7021Addr 0x40     // SI7021 temperature sensor I2C address is 0x40 (64)
 
 // Byte array to print the degree symbol to the OLED
 byte degreeSymbol[8] = {
@@ -107,7 +100,7 @@ uint8_t mqttXpos = 95;
 unsigned long previousPublishMillis;   // previous millis used to control when MQTT is sent
 unsigned long currentMillis;        // current millis
 
-float desiredTemp = 28;           // temperature we're shooting for
+float desiredTemp = 20;           // temperature we're shooting for
 float upperBound= 3;                // upper bound on temperature tolerance
 float lowerBound = 0.5;             // lower bound on temperature tolerance
 
@@ -306,42 +299,34 @@ void publishData(const char* topic, const char* msg)
  *  \return temperature in degrees celsius
  */
 float readAmbientTemperature()
-{
-    float thermistorVoltage = readSensor(0);
-    
-    #ifdef DEBUG_TEMPERATURE
-    Serial.println("Temperature Voltage = " + String(thermistorVoltage));
-    #endif
-    
-    float temperature = (thermistorVoltage - 0.5)*100;    // [degrees C]
-    
-    #ifdef DEBUG_TEMPERATURE
-    Serial.println("temperature = " + String(temperature));
-    #endif
+{    
+    unsigned int measurement;
+    Wire.beginTransmission(si7021Addr);
+    // Send temperature measurement code
+    Wire.write(0xF3);
+    Wire.endTransmission();
+    delay(500);
+
+    // Request 2 bytes of data
+    Wire.requestFrom(si7021Addr, 2);
+
+    //Read 2 bytes of data for temperature
+    if (Wire.available() == 2)
+    {
+        unsigned int msb = Wire.read();
+        unsigned int lsb = Wire.read();
+        // Clear the last to bits of LSB to 00.
+        // According to datasheet LSB of RH is always xxxxxx10
+        lsb &= 0xFC;
+        measurement = msb << 8 | lsb;
+    }
+
+    // Convert the data
+    float temperature = ((175.72 * measurement) / 65536.0) - 46.85;
+    Serial.print("Temperature: ");
+    Serial.println(temperature);
     
     return temperature;
-}
-
-/**
- * Reads the sensor value from the MCP3008 and converts it into a voltage
- *  
- *  \param[in]  channelNum - Channel number on MCP3308 to read
- *  
- *  \return voltage
- */
-float readSensor(int channelNum)
-{   
-    int sum = 0;
-    int numOfSensorReads = 10;
-    for (int i = 0; i< numOfSensorReads ; i++) { 
-        sum += adc.readADC(channelNum); 
-        delay(100);}
-    int sensorVal = sum / numOfSensorReads;
-    #ifdef DEBUG_SENSOR
-    Serial.println("sensorVal = " + String(sensorVal));
-    #endif
-    float voltage = ( (float)sensorVal / MAX_ADC_READING ) * ADC_REF_VOLTAGE;   // [V]
-    return voltage;
 }
 
 /**
@@ -468,6 +453,13 @@ void setup()
     oled.setTextColor(WHITE);
     oled.setCursor(0, 0);
 
+    // Setup si7021 temperature sensor
+    Wire.begin(D2, D1);
+    Wire.beginTransmission(si7021Addr);
+    Wire.write(0xFE); // Write reset command
+    Wire.endTransmission();
+    delay(300);
+    
     // Setup wifi
     setup_wifi();
     
@@ -525,6 +517,7 @@ void loop()
             publishData(topic0, temperature_msg);
 
             // Request the boiler status from mqtt broker and toggle based on that
+            setBoiler(temperature); // change this later to the temperature from the broker
         }
         else
         {   // something is wrong. we're not connected to the mqtt broker      
@@ -546,7 +539,7 @@ void loop()
                 drawTwoByteSymbol(wifiSymbolL, wifiSymbolR, 111, 0);
 
                 // Try reconnecting to the mqtt broker
-                //reconnect();
+                reconnect();
             }
             else 
             {   // we're not connected to wifi. can't get to the broker with it!
@@ -558,7 +551,7 @@ void loop()
                 drawTwoByteSymbol(noWifiSymbolL, noWifiSymbolR, 111, 0);
 
                 // Let's try connecting to wifi again
-                //setup_wifi();
+                setup_wifi();
             }
         }
 

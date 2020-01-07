@@ -10,29 +10,25 @@ This is the code for the node that connects to the boiler. During normal operati
 ### Parts
 - ESP-12e: microcontroller around which everything is built
 - TMP36 Precision Linear Analog Output: thermistor to read temperature
-- MCP3008: 8-channel analog to digital converter (ADC)
+- si7021 Humidity and Temperature sensor
 - UCTRONICS 0.96 Inch 128X64 Yellow Blue OLED module: screen
 
-## Build Instructions
+### Build Instructions
 - Download this repo to your local machine.
-- Put the NetworkedEnvironmentMonitor folder in your Arduino folder (default location is ~Arduino).
-- Open the NetworkedEnvironmentMonitor.ino file with the Arduino IDE.
-- Add the ESP8266 module to your Arduino IDE following these instructions
+- Put the NetworkedThermostat folder in your Arduino folder (default location is ~Arduino).
+- Open the NetworkedThermostat.ino file with the Arduino IDE.
+- Add the ESP8266 module to your Arduino IDE
 - Connect the ESP-12e module to your computer
 - Load the sketch to the ESP-12e using the Arduino IDE
 
 ### Dependencies
 The following is a list of libraries which this sketch uses as well as a short description:
-- MCP3008 - communicate with the MCP3008 ADC
 - PubSubClient - enable MQTT communication
 - ArducamSSD1306 - control OLED display
 - Adafruit_GFX - help control OLED display
-- Wire - needed for I2C communication with OLED display
+- Wire - needed for I2C communication
 
 ## Future Updates
 - Push buttons to set desired temperature
 - Battery pack and low battery alert
-- Various sensors
-    - Light dependent resistor to measure lux
-    - Humidity sensor
-    - Room occupancy detection
+- Humidity sensor (able to measure with current sensor but not implemented)
