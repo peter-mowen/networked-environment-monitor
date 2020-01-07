@@ -1,6 +1,5 @@
 // Uncomment different ones to show different debug messages
 #define DEBUG
-#define DEBUG_SENSOR            // print sensor's ADC value to serial
 #define DEBUG_TEMPERATURE       // print temperature sensor voltage and calculated temperature to serial
 //#define DEBUG_NETWORK
 
@@ -110,15 +109,20 @@ uint8_t mqttXpos = 95;
 unsigned long previousPublishMillis;   // previous millis used to control when MQTT is sent
 unsigned long currentMillis;        // current millis
 
-float lastSetTemp = 18;             // last temperature that was set (C)
-float currentSetTemp = 18;          // current temperature this is set (C)
+float currentSetTemp;               // current temperature this is set (C)
 float upperBound= 3;                // upper bound on temperature tolerance (C)
 float lowerBound = 0.5;             // lower bound on temperature tolerance (C)
 
 #define relayPin D3                 // pin the controls relay that controls boiler
 #define upPin D6                    // pin for "up" on temperature select
 #define downPin D5                  // pin for "down" on temperature select
-#define debounceTime    10          // 10 ms for debounce
+
+boolean currentUpBtnState;
+boolean previousUpBtnState;
+
+boolean currentDownBtnState;
+boolean previousDownBtnState;
+
 /**
  * Code from the pubsubclient esp8266 example that connects to the wifi network.
  *  I added code to print output to the screen in addition to the serial port
@@ -493,6 +497,8 @@ void setup()
 
     // Publish initial readings to MQTT
     if (client.connected()) { publishData(topic0, temperature_msg); }
+
+    currentSetTemp = 18;
     
     // Set Initial start time 
     previousPublishMillis = millis();  // initial start time
@@ -546,8 +552,12 @@ void loop()
             // Let's check the wifi connection
             if (WiFi.status() == WL_CONNECTED)
             {   // we are connected to wifi but not mqtt broker
-                #ifdef DEGBUG_NETWORK
-                Serial.println("Connected to network but not mqtt broker");
+                #ifdef DEBUG_NETWORK
+                Serial.print("Connected to ");
+                Serial.print(ssid) ;
+                Serial.println(" but not mqtt broker");
+                Serial.print("IP Address: ");
+                Serial.println(WiFi.localIP());
                 #endif
             
                 drawTwoByteSymbol(wifiSymbolL, wifiSymbolR, 111, 0);
@@ -558,7 +568,7 @@ void loop()
             else 
             {   // we're not connected to wifi. can't get to the broker with it!
 
-                #ifdef DEGBUG_NETWORK
+                #ifdef DEBUG_NETWORK
                 Serial.println("Not connect to wifi and not connected to mqtt broker");
                 #endif
                 
@@ -574,6 +584,39 @@ void loop()
         printTempToOLED(temperature, 0);
     }
 
+    // check up button status for set temperature
+    boolean released = false;
+    currentUpBtnState = digitalRead(upPin);
+    if (currentUpBtnState == HIGH) // buttons are active low.
+    {
+        if (previousUpBtnState == LOW)
+        { // button was released after being held down
+            released = true;
+        }
+    }
+    previousUpBtnState = currentUpBtnState;
+    
+    if (released)
+    {
+        currentSetTemp++;
+    }
+
+    // reinitialized released and check down button
+    released = false;
+    currentDownBtnState = digitalRead(downPin);
+    if (currentDownBtnState == HIGH) // buttons are active low.
+    {
+        if (previousDownBtnState == LOW)
+        { // button was released after being held down
+            released = true;
+        }
+    }
+    previousDownBtnState = currentDownBtnState;
+    
+    if (released)
+    {
+        currentSetTemp--;
+    }
 
     printTempToOLED(currentSetTemp, 1);
     
