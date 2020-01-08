@@ -4,7 +4,7 @@
 //#define DEBUG_NETWORK
 
 /* define timer values */
-#define MQTT_PERIOD 1000            // how often a message is published to MQTT
+unsigned long MQTT_PERIOD = 60000; // how often a message is published to MQTT
 
 /* define ADC constants */
 #define MAX_ADC_READING 1023        // max num` on analog to digital converter
@@ -23,8 +23,11 @@ WiFiClient espClient;
 PubSubClient client(espClient);
 
 const char* clientID = "NEM 01";
-const char* topic0 = "NEM 01/temperature";
-const char* topic1 = "NEM 01/light level";
+const char* temperatureTopic = "NEM 01/temperature";
+const char* relayTopic = "NEM 01/relay";
+
+const char* relayON = "ON";
+const char* relayOFF = "OFF";
 
 /* OLED libraries and constants. Copy/pasted from example code */
 #include <ArducamSSD1306.h> // Modification of Adafruit_SSD1306 for ESP8266 compatibility
@@ -438,8 +441,23 @@ void drawTwoByteSymbol(byte* left, byte* right, int x, int y)
  */
 void setBoiler(float inputTemp)
 {
-    if (inputTemp < currentSetTemp - lowerBound) { digitalWrite(relayPin, HIGH); }
-    else if (inputTemp > currentSetTemp + upperBound) { digitalWrite(relayPin, LOW); }
+    Serial.println("Checking to see if relay should be on");
+    if (inputTemp < currentSetTemp - lowerBound) 
+    { 
+        #ifdef DEBUG
+        Serial.println("Relay ON");
+        #endif
+        digitalWrite(relayPin, HIGH);
+        if (client.connected()) { publishData(relayTopic, relayON); }
+    }
+    else if (inputTemp > currentSetTemp + upperBound) 
+    { 
+        #ifdef DEBUG
+        Serial.println("Relay OFF");
+        #endif
+        digitalWrite(relayPin, LOW);
+        if (client.connected()) { publishData(relayTopic, relayOFF); }
+    }
 }
 
 /**
@@ -492,11 +510,11 @@ void setup()
     
     // Take initial temperature reading
     float temperature = readAmbientTemperature();
-    char temperature_msg[7];
+    char temperature_msg[6];
     sprintf(temperature_msg, "%.1f", temperature);
 
     // Publish initial readings to MQTT
-    if (client.connected()) { publishData(topic0, temperature_msg); }
+    if (client.connected()) { publishData(temperatureTopic, temperature_msg); }
 
     currentSetTemp = 18;
     
@@ -529,13 +547,14 @@ void loop()
         sprintf(temperature_msg, "%.1f", temperature);
 
         // Check MQTT connection
+        reconnect(); // connection might have dropped between last time and now
         if (client.connected())
         {   // we're connected. yay.
             drawTwoByteSymbol(mqttSymbolL, mqttSymbolR, mqttXpos, 0);
-
+            Serial.println("Should be publishing...");
             // Publish temperature
-            publishData(topic0, temperature_msg);
-
+            publishData(temperatureTopic, temperature_msg);
+            Serial.println("Should have published...");
             // Request the boiler status from mqtt broker and toggle based on that
             setBoiler(temperature); // change this later to the temperature from the broker
         }
@@ -559,16 +578,17 @@ void loop()
                 Serial.print("IP Address: ");
                 Serial.println(WiFi.localIP());
                 #endif
-            
-                drawTwoByteSymbol(wifiSymbolL, wifiSymbolR, 111, 0);
 
-                // Try reconnecting to the mqtt broker
-                reconnect();
+                #ifdef DEBUG
+                Serial.println("Not connected to mqtt but am connected to wifi");
+                #endif
+                
+                drawTwoByteSymbol(noMqttSymbolL, noMqttSymbolR, 95, 0);
             }
             else 
             {   // we're not connected to wifi. can't get to the broker with it!
 
-                #ifdef DEBUG_NETWORK
+                #ifdef DEBUG
                 Serial.println("Not connect to wifi and not connected to mqtt broker");
                 #endif
                 
