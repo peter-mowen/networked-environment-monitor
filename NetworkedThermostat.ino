@@ -26,9 +26,13 @@ PubSubClient client(espClient);
 const char* clientID = "NEM 01";
 const char* temperatureTopic = "NEM 01/temperature";
 const char* relayTopic = "NEM 01/relay";
+const char* preferredTempTopic = "NEW 01/preferred temperature";
 
 const char* relayON = "ON";
 const char* relayOFF = "OFF";
+
+char temperature_msg[6];
+char preferredTemp_msg[6];
 
 /* OLED libraries and constants. Copy/pasted from example code */
 #include <ArducamSSD1306.h> // Modification of Adafruit_SSD1306 for ESP8266 compatibility
@@ -454,7 +458,7 @@ void setBoiler(float inputTemp)
     #ifdef DEBUG
     Serial.println("Checking relay status..");
     #endif
-    
+    if (!client.connected()) {reconnect();}
     if (inputTemp < currentSetTemp - lowerBound) 
     { 
         #ifdef DEBUG
@@ -528,19 +532,12 @@ void setup()
     
     // Take initial temperature reading
     readAmbientTemperature();
-    char temperature_msg[6];
     sprintf(temperature_msg, "%.1f", temperature);
-
-    // Publish initial readings to MQTT
-    if (client.connected()) { publishData(temperatureTopic, temperature_msg); }
-
-    // Set Initial start time 
-    previousPublishMillis = millis();  // initial start time
-    previousScreenMillis = millis();
 
     // Initialize variables for setting preferred temperature
     currentSetTemp = 18;
     previousSetTemp = currentSetTemp;
+    sprintf(preferredTemp_msg, "%.0f", currentSetTemp);
     
     currentDownBtnState = digitalRead(downPin);
     previousDownBtnState = currentDownBtnState;
@@ -548,6 +545,17 @@ void setup()
     currentUpBtnState = digitalRead(upPin);
     previousUpBtnState = currentUpBtnState;
 
+    // Publish initial readings to MQTT
+    if (client.connected())
+    { 
+        publishData(temperatureTopic, temperature_msg); 
+        publishData(preferredTempTopic, preferredTemp_msg);
+    }
+
+    // Set Initial start time 
+    previousPublishMillis = millis();  // initial start time
+    previousScreenMillis = millis();
+    
     // Print the current temperature and the default preferred temperature to OLED
     clearBody();
     printTempToOLED(0);
@@ -584,10 +592,9 @@ void loop()
             drawTwoByteSymbol(mqttSymbolL, mqttSymbolR, mqttXpos, 0);
             Serial.println("Should be publishing...");
             // Publish temperature
-            char temperature_msg[7];
             sprintf(temperature_msg, "%.1f", temperature);
             publishData(temperatureTopic, temperature_msg);
-            Serial.println("Should have published...");
+            
             // Request the boiler status from mqtt broker and toggle based on that
             setBoiler(temperature); // change this later to the temperature from the broker
         }
@@ -686,11 +693,15 @@ void loop()
         #ifdef DEBUG
         Serial.println("Set temperature changed!");
         #endif
-        
-        if (client.connected()) { setBoiler(temperature); }
+        if (!client.connected()) {reconnect();}
+        if (client.connected()) 
+        {
+            sprintf(preferredTemp_msg, "%.0f", currentSetTemp);
+            publishData(preferredTempTopic, preferredTemp_msg); 
+            setBoiler(temperature); 
+        }
         else { setBoiler(temperature); }
         
         previousSetTemp = currentSetTemp;
     }
-    
 }
