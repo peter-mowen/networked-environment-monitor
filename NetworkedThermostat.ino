@@ -4,7 +4,8 @@
 //#define DEBUG_NETWORK
 
 /* define timer values */
-unsigned long MQTT_PERIOD = 60000; // how often a message is published to MQTT
+#define MQTT_PERIOD 180000              // how often a message is published to MQTT
+#define TEMPERATURE_UPDATE_PERIOD 60000 // how often the temperature is updates on the OLED
 
 /* define ADC constants */
 #define MAX_ADC_READING 1023        // max num` on analog to digital converter
@@ -109,9 +110,11 @@ byte questionMarkSymbolR[16] = {
 uint8_t mqttXpos = 95;
 
 /* Global Variables */
-unsigned long previousPublishMillis;   // previous millis used to control when MQTT is sent
-unsigned long currentMillis;        // current millis
+unsigned long previousPublishMillis;    // previous millis used to control when MQTT is sent
+unsigned long previousScreenMillis;     // previous millis used to control when temperature is update on the OLED
+unsigned long currentMillis;            // current millis
 
+float temperature;
 float currentSetTemp;               // current temperature this is set (C)
 float upperBound= 3;                // upper bound on temperature tolerance (C)
 float lowerBound = 0.5;             // lower bound on temperature tolerance (C)
@@ -326,9 +329,9 @@ void publishData(const char* topic, const char* msg)
 
 /**
  * Read thermistor and convert voltage to temperature in degrees celsius
- *  \return temperature in degrees celsius
+ *  Updates global variable temperature
  */
-float readAmbientTemperature()
+void readAmbientTemperature()
 {    
     unsigned int measurement;
     Wire.beginTransmission(si7021Addr);
@@ -352,11 +355,9 @@ float readAmbientTemperature()
     }
 
     // Convert the data
-    float temperature = ((175.72 * measurement) / 65536.0) - 46.85;
+    temperature = ((175.72 * measurement) / 65536.0) - 46.85;
     Serial.print("Temperature: ");
     Serial.println(temperature);
-    
-    return temperature;
 }
 
 /**
@@ -394,26 +395,34 @@ float readAmbientTemperature()
  *  
  *  \param[in] temperature
  */
-void printTempToOLED(float temperature, uint8_t location)
+void printTempToOLED(uint8_t location)
 {
-    int roundedTemp = temperature + 0.5;
-
     // Default things to print
-    String displayTemp = "Temp:" + String(roundedTemp);
-    uint8_t pos = 16;
+    int roundedTemp = temperature + 0.5;
+    String line = "Temp:" + String(roundedTemp);
+    uint8_t yPos = 16;
     
     if (location == 1)
     {
-        displayTemp = "Set: "+ String(roundedTemp);
-        pos = 32;
+        roundedTemp = currentSetTemp;
+        line = "Set: "+ String(roundedTemp);
+        yPos = 32;
     }
 
-    oled.fillRect(displayTemp.length()*12-32, pos, 32, 16, BLACK);
-    oled.setCursor(0, pos);
+    uint8_t endOfLabel = line.length()*12-32;
+    uint8_t toEndOfLine = 127-endOfLabel ;
+
+    // clear everything after the label
+    oled.fillRect(endOfLabel, yPos, toEndOfLine, 16, BLACK);
+    // set text size and resest cursor position
     oled.setTextSize(2);
-    oled.print(displayTemp);
-    oled.drawBitmap(displayTemp.length()*12, pos, degreeSymbol, 8, 8, WHITE);
+    oled.setCursor(0, yPos);
+    // print label plus temperature to screen
+    oled.print(line);
+    // print degree symbol followed by C
+    oled.drawBitmap(line.length()*12, yPos, degreeSymbol, 8, 8, WHITE);
     oled.println(" C");
+    // Update display
     oled.display();
 }
 
@@ -441,7 +450,10 @@ void drawTwoByteSymbol(byte* left, byte* right, int x, int y)
  */
 void setBoiler(float inputTemp)
 {
-    Serial.println("Checking to see if relay should be on");
+    #ifdef DEBUG
+    Serial.println("Checking relay status..");
+    #endif
+    
     if (inputTemp < currentSetTemp - lowerBound) 
     { 
         #ifdef DEBUG
@@ -469,8 +481,7 @@ void setup()
     #ifdef DEBUG
     // Open Serial port
     Serial.begin(115200);
-    // Send out startup phrase
-    Serial.println("Arduino Starting Up...");
+    Serial.println("Networked Thermostat Starting Up...");
     #endif
 
     // Make relayPin an output and make sure it's LOW
@@ -509,7 +520,7 @@ void setup()
     }
     
     // Take initial temperature reading
-    float temperature = readAmbientTemperature();
+    readAmbientTemperature();
     char temperature_msg[6];
     sprintf(temperature_msg, "%.1f", temperature);
 
@@ -520,10 +531,11 @@ void setup()
     
     // Set Initial start time 
     previousPublishMillis = millis();  // initial start time
-
+    previousScreenMillis = millis();
+    
     clearBody();
-    printTempToOLED(temperature, 0);
-    printTempToOLED(currentSetTemp, 1);
+    printTempToOLED(0);
+    printTempToOLED(1);
 }
 
 
@@ -539,13 +551,16 @@ void loop()
     */
     currentMillis = millis();
     
-    if ((currentMillis - previousPublishMillis >= MQTT_PERIOD))
+    if (currentMillis - previousScreenMillis >= TEMPERATURE_UPDATE_PERIOD)
     {
         // Get temperature reading
-        float temperature = readAmbientTemperature();
-        char temperature_msg[7];
-        sprintf(temperature_msg, "%.1f", temperature);
-
+        readAmbientTemperature();
+        printTempToOLED(0);
+        previousScreenMillis = currentMillis;
+    }
+    
+    if ((currentMillis - previousPublishMillis >= MQTT_PERIOD))
+    {
         // Check MQTT connection
         reconnect(); // connection might have dropped between last time and now
         if (client.connected())
@@ -553,6 +568,8 @@ void loop()
             drawTwoByteSymbol(mqttSymbolL, mqttSymbolR, mqttXpos, 0);
             Serial.println("Should be publishing...");
             // Publish temperature
+            char temperature_msg[7];
+            sprintf(temperature_msg, "%.1f", temperature);
             publishData(temperatureTopic, temperature_msg);
             Serial.println("Should have published...");
             // Request the boiler status from mqtt broker and toggle based on that
@@ -601,7 +618,6 @@ void loop()
 
         // Network connectivity doesn't matter for stuff beyond this point
         previousPublishMillis = currentMillis;
-        printTempToOLED(temperature, 0);
     }
 
     // check up button status for set temperature
@@ -638,6 +654,6 @@ void loop()
         currentSetTemp--;
     }
 
-    printTempToOLED(currentSetTemp, 1);
+    printTempToOLED(1);
     
 }
