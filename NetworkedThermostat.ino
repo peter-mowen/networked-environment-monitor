@@ -116,6 +116,7 @@ unsigned long currentMillis;            // current millis
 
 float temperature;
 float currentSetTemp;               // current temperature this is set (C)
+float previousSetTemp;
 float upperBound= 3;                // upper bound on temperature tolerance (C)
 float lowerBound = 0.5;             // lower bound on temperature tolerance (C)
 
@@ -470,6 +471,12 @@ void setBoiler(float inputTemp)
         digitalWrite(relayPin, LOW);
         if (client.connected()) { publishData(relayTopic, relayOFF); }
     }
+    else
+    {
+        #ifdef DEBUG
+        Serial.println("currentSetTemp - lowerBound < inputTemp < currentSetTemp + upperBound");
+        #endif
+    }
 }
 
 /**
@@ -527,12 +534,21 @@ void setup()
     // Publish initial readings to MQTT
     if (client.connected()) { publishData(temperatureTopic, temperature_msg); }
 
-    currentSetTemp = 18;
-    
     // Set Initial start time 
     previousPublishMillis = millis();  // initial start time
     previousScreenMillis = millis();
+
+    // Initialize variables for setting preferred temperature
+    currentSetTemp = 18;
+    previousSetTemp = currentSetTemp;
     
+    currentDownBtnState = digitalRead(downPin);
+    previousDownBtnState = currentDownBtnState;
+
+    currentUpBtnState = digitalRead(upPin);
+    previousUpBtnState = currentUpBtnState;
+
+    // Print the current temperature and the default preferred temperature to OLED
     clearBody();
     printTempToOLED(0);
     printTempToOLED(1);
@@ -619,7 +635,7 @@ void loop()
         // Network connectivity doesn't matter for stuff beyond this point
         previousPublishMillis = currentMillis;
     }
-
+    
     // check up button status for set temperature
     boolean released = false;
     currentUpBtnState = digitalRead(upPin);
@@ -634,9 +650,13 @@ void loop()
     
     if (released)
     {
+        #ifdef DEBUG
+        Serial.println("Up button was pressed, then released");
+        #endif
+        previousSetTemp = currentSetTemp;
         currentSetTemp++;
     }
-
+    
     // reinitialized released and check down button
     released = false;
     currentDownBtnState = digitalRead(downPin);
@@ -651,9 +671,26 @@ void loop()
     
     if (released)
     {
+        #ifdef DEBUG
+        Serial.println("Down button was pressed, then released");
+        #endif
+        
+        previousSetTemp = currentSetTemp;
         currentSetTemp--;
     }
-
+    
     printTempToOLED(1);
+    
+    if (abs(previousSetTemp - currentSetTemp) > 0.5)
+    {
+        #ifdef DEBUG
+        Serial.println("Set temperature changed!");
+        #endif
+        
+        if (client.connected()) { setBoiler(temperature); }
+        else { setBoiler(temperature); }
+        
+        previousSetTemp = currentSetTemp;
+    }
     
 }
