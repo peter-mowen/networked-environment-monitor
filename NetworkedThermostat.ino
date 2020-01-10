@@ -1,7 +1,7 @@
 // Uncomment different ones to show different debug messages
 #define DEBUG
 #define DEBUG_TEMPERATURE       // print temperature sensor voltage and calculated temperature to serial
-//#define DEBUG_NETWORK
+//#define DEBUG_ON_OLED
 
 /* define timer values */
 #define MQTT_PERIOD 180000              // how often a message is published to MQTT
@@ -122,7 +122,7 @@ float temperature;
 float currentSetTemp;               // current temperature this is set (C)
 float previousSetTemp;
 float upperBound= 3;                // upper bound on temperature tolerance (C)
-float lowerBound = 0.5;             // lower bound on temperature tolerance (C)
+float lowerBound = 0.5;               // lower bound on temperature tolerance (C)
 
 #define relayPin D3                 // pin the controls relay that controls boiler
 #define upPin D6                    // pin for "up" on temperature select
@@ -141,26 +141,23 @@ boolean previousDownBtnState;
  */
 bool setup_wifi() 
 {
-    #ifdef DEBUG_NETWORK
-    clearBody();
-    String connecting = "Connecting to: ";
-    delay(10);
-    
-    Serial.println();
-    Serial.print(connecting);
+    #ifdef DEBUG
+    Serial.print("Connecting to: ");
     Serial.println(ssid);
-    
-    
+    #endif
+
+    #ifdef DEBUG_ON_OLED
+    clearBody();
     // Setup Screen for printing wifi info
     oled.setTextSize(1);
     oled.setCursor(0,16);
     
     // Print message to screen
-    oled.println(connecting);
+    oled.println("Connecting to: ");
     oled.println(ssid);
     oled.display();
     #endif
-    
+
     // We start by connecting to a WiFi network
     WiFi.begin(ssid, password);
 
@@ -170,13 +167,10 @@ bool setup_wifi()
     {
         delay(500);
         
-        #ifdef DEBUG_NETWORK
+        #ifdef DEBUG
         Serial.print(".");
-        
-        
-        oled.print(".");
-        oled.display();
         #endif
+        
         if (attempts % 2 == 0) {drawTwoByteSymbol(wifiSymbolL, wifiSymbolR, wifiXpos, 0); oled.display();}
         else { oled.fillRect(wifiXpos, 0, 16, 16, BLACK); oled.display(); }
         
@@ -186,9 +180,11 @@ bool setup_wifi()
         {
             String failedConnectMsg = "Failed to connect to WiFi network!";
             
-            #ifdef DEBUG_NETWORK
+            #ifdef DEBUG
             Serial.println(failedConnectMsg);
-            
+            #endif
+
+            #ifdef DEBUG_ON_OLED
             oled.println();
             oled.print(failedConnectMsg);
             #endif
@@ -196,7 +192,7 @@ bool setup_wifi()
             drawTwoByteSymbol(noWifiSymbolL, noWifiSymbolR, 111, 0);
             oled.display();
 
-            #ifdef DEBUG_NETWORK
+            #ifdef DEBUG_ON_OLED
             delay(2000);
             #endif
             return false;
@@ -205,27 +201,26 @@ bool setup_wifi()
     
     // Convey success message
 
-    #ifdef DEBUG_NETWORK
     String connectedMsg = "WiFi connected";
     String ipMsg = "IP address: ";
     
-    Serial.println("");
+    #ifdef DEBUG
+    Serial.println();
     Serial.println(connectedMsg);
     Serial.println(ipMsg);
     Serial.println(WiFi.localIP());
-    
-    
+    #endif
+
+    #ifdef DEBUG_ON_OLED
     oled.println();    
     oled.println(connectedMsg);
     oled.println(ipMsg);
     oled.println((WiFi.localIP()));
-    #endif
-    drawTwoByteSymbol(wifiSymbolL, wifiSymbolR, wifiXpos, 0);
-    
-    oled.display();
-    
     delay(2000); // wait before moving on so user has time to read the info
+    #endif
     
+    drawTwoByteSymbol(wifiSymbolL, wifiSymbolR, wifiXpos, 0);
+    oled.display();
     return true;
 }
 
@@ -243,77 +238,106 @@ void callback(char* topic, byte* payload, unsigned int length){}
  *  I added code to print output to the screen in addition to the serial port
  */
 void reconnect() {
-    
+    #ifdef DEBUG_ON_OLED
     // Reset bottom portion of screen to black to start printing new info
-    #ifdef DEBUG_NETWORK
     clearBody();
     #endif
     
-    int attempt = 0;        // initialize number of attempts
-    int maxAttempts = 2;    // set max attempts
-    
-    // Loop until connected or max attempts is reached
-    while (!client.connected()) {
-        attempt++;
-        
-        #ifdef DEBUG_NETWORK
-        Serial.println("Attempting to connect to MQTT broker at:");
-        Serial.println(mqtt_server);
-        
-        
-        oled.println("Attempting to connect");
-        oled.setCursor(7, 25);
-        oled.println("to MQTT broker at:");
-        oled.setCursor(14, 34);
-        oled.println(mqtt_server);
-        oled.display();
+    // Let's check the wifi connection
+    if (WiFi.status() == WL_CONNECTED)
+    {   // we are connected to wifi but not mqtt broker
+        #ifdef DEBUG
+        Serial.println("Not connected to mqtt but am connected to wifi");
         #endif
+
+        int attempt = 0;        // initialize number of attempts
+        int maxAttempts = 2;    // set max attempts
         
-        // Attempt to connect
-        drawTwoByteSymbol(questionMarkSymbolL, questionMarkSymbolR, mqttXpos, 0);
-        oled.display();
-        
-        if (client.connect(clientID))
-        {
-            #ifdef DEBUG_NETWORK
-            Serial.println("connected");
-            oled.println("connected");
-            delay(2000);    // wait so user can read screen
+        // Loop until connected or max attempts is reached
+        while (!client.connected()) {
+            attempt++;
+            
+            #ifdef DEBUG
+            // Serial debug message
+            Serial.println("Attempting to connect to MQTT broker at:");
+            Serial.println(mqtt_server);
+            #endif
+            #ifdef DEBUG_ON_OLED
+            // OLED debug message
+            oled.println("Attempting to connect");
+            oled.setCursor(7, 25);
+            oled.println("to MQTT broker at:");
+            oled.setCursor(14, 34);
+            oled.println(mqtt_server);
             #endif
             
-            drawTwoByteSymbol(mqttSymbolL, mqttSymbolR, mqttXpos, 0);
+            drawTwoByteSymbol(questionMarkSymbolL, questionMarkSymbolR, mqttXpos, 0);
             oled.display();
             
-        } 
-        else 
-        {
-            String failedMQTT = "failed, rc=" + String(client.state());
-            if (attempt == maxAttempts)
+            // Attempt to connect
+            if (client.connect(clientID))
             {
-                #ifdef DEBUG_NETWORK
-                oled.println("Failed to connect to MQTT broker");
-                delay(2000);
+                #ifdef DEBUG
+                // Serial debug message
+                Serial.println("connected");
                 #endif
                 
-                drawTwoByteSymbol(noMqttSymbolL, noMqttSymbolR, mqttXpos, 0);
+                #ifdef DEBUG_ON_OLED
+                // OLED debug message
+                oled.println("connected");
+                delay(2000);    // wait so user can read screen
+                #endif
+                
+                drawTwoByteSymbol(mqttSymbolL, mqttSymbolR, mqttXpos, 0);
                 oled.display();
                 return;
             } 
             else 
             {
-                #ifdef DEBUG_NETWORK
-                Serial.println(failedMQTT);
-                oled.println(failedMQTT);
-                #endif
-
-                drawTwoByteSymbol(noMqttSymbolL, noMqttSymbolR, mqttXpos, 0);
-                oled.display();
-                
-                // Wait 5 seconds before retrying
-                delay(5000);
-            }
-        }
+                if (attempt == maxAttempts)
+                {
+                    #ifdef DEBUG
+                    Serial.println("Failed to connect to MQTT broker");
+                    #endif
+                    #ifdef DEBUG_ON_OLED
+                    oled.println("Failed to connect to MQTT broker");
+                    delay(2000);
+                    #endif       
+                    
+                    drawTwoByteSymbol(noMqttSymbolL, noMqttSymbolR, mqttXpos, 0);
+                    oled.display();
+                    return;
+                } 
+                else 
+                {
+                    String failedMQTT = "failed, rc=" + String(client.state());
+                    #ifdef DEBUG
+                    Serial.println(failedMQTT);
+                    #endif
+                    #ifdef DEBUG_ON_OLED
+                    // OLED debug message
+                    oled.println(failedMQTT);
+                    #endif
+    
+                    // Wait 5 seconds before retrying
+                    delay(5000);
+                } // end else
+            } // end else
+        } // end while (!client.connected()
     }
+    else 
+    {   // we're not connected to wifi. can't get to the broker with out it!
+
+        #ifdef DEBUG
+        Serial.println("Not connect to wifi and not connected to mqtt broker");
+        #endif
+        
+        drawTwoByteSymbol(noWifiSymbolL, noWifiSymbolR, 111, 0);
+        drawTwoByteSymbol(noMqttSymbolL, noMqttSymbolR, mqttXpos, 0);
+        // Let's try connecting to wifi again.
+        setup_wifi();
+    }
+    
 }
 
 /**
@@ -403,7 +427,7 @@ void readAmbientTemperature()
 void printTempToOLED(uint8_t location)
 {
     // Default things to print
-    int roundedTemp = temperature + 0.5;
+    int roundedTemp = temperature;
     String line = "Temp:" + String(roundedTemp);
     uint8_t yPos = 16;
     
@@ -458,8 +482,8 @@ void setBoiler(float inputTemp)
     #ifdef DEBUG
     Serial.println("Checking relay status..");
     #endif
-    if (!client.connected()) {reconnect();}
-    if (inputTemp < currentSetTemp - lowerBound) 
+    
+    if (inputTemp <= currentSetTemp - lowerBound) 
     { 
         #ifdef DEBUG
         Serial.println("Relay ON");
@@ -467,7 +491,7 @@ void setBoiler(float inputTemp)
         digitalWrite(relayPin, HIGH);
         if (client.connected()) { publishData(relayTopic, relayON); }
     }
-    else if (inputTemp > currentSetTemp + upperBound) 
+    else if (inputTemp >= currentSetTemp + upperBound) 
     { 
         #ifdef DEBUG
         Serial.println("Relay OFF");
@@ -525,15 +549,16 @@ void setup()
         client.setServer(mqtt_server, 1883);
         client.setCallback(callback);
         if (!client.connected()) { reconnect(); }
-    } else
-    { // not connected to wifi so we can't connect to MQTT broker
-        drawTwoByteSymbol(noMqttSymbolL, noMqttSymbolR, mqttXpos, 0);
     }
     
     // Take initial temperature reading
     readAmbientTemperature();
     sprintf(temperature_msg, "%.1f", temperature);
-
+    #ifdef DEBUG
+    Serial.print("Initial Temperature: ");
+    Serial.println(temperature_msg);
+    #endif
+    
     // Initialize variables for setting preferred temperature
     currentSetTemp = 18;
     previousSetTemp = currentSetTemp;
@@ -569,10 +594,8 @@ void setup()
  */
 void loop()
 {
-    /*
     if (!client.connected()) { reconnect(); }
     client.loop();
-    */
     currentMillis = millis();
     
     if (currentMillis - previousScreenMillis >= TEMPERATURE_UPDATE_PERIOD)
@@ -585,61 +608,12 @@ void loop()
     
     if ((currentMillis - previousPublishMillis >= MQTT_PERIOD))
     {
-        // Check MQTT connection
-        reconnect(); // connection might have dropped between last time and now
-        if (client.connected())
-        {   // we're connected. yay.
-            drawTwoByteSymbol(mqttSymbolL, mqttSymbolR, mqttXpos, 0);
-            Serial.println("Should be publishing...");
-            // Publish temperature
-            sprintf(temperature_msg, "%.1f", temperature);
-            publishData(temperatureTopic, temperature_msg);
-            
-            // Request the boiler status from mqtt broker and toggle based on that
-            setBoiler(temperature); // change this later to the temperature from the broker
-        }
-        else
-        {   // something is wrong. we're not connected to the mqtt broker      
-            
-            drawTwoByteSymbol(noMqttSymbolL, noMqttSymbolR, mqttXpos, 0);
+        sprintf(temperature_msg, "%.1f", temperature);
+        publishData(temperatureTopic, temperature_msg);
+        
+        // Request the boiler status from mqtt broker and toggle based on that
+        setBoiler(temperature); // change this later to the temperature from the broker
 
-            // Not connected so control boiler based on local temp this pass.
-            setBoiler(temperature);
-
-            // Then try to connect to the network again in prepartion for next time
-            
-            // Let's check the wifi connection
-            if (WiFi.status() == WL_CONNECTED)
-            {   // we are connected to wifi but not mqtt broker
-                #ifdef DEBUG_NETWORK
-                Serial.print("Connected to ");
-                Serial.print(ssid) ;
-                Serial.println(" but not mqtt broker");
-                Serial.print("IP Address: ");
-                Serial.println(WiFi.localIP());
-                #endif
-
-                #ifdef DEBUG
-                Serial.println("Not connected to mqtt but am connected to wifi");
-                #endif
-                
-                drawTwoByteSymbol(noMqttSymbolL, noMqttSymbolR, 95, 0);
-            }
-            else 
-            {   // we're not connected to wifi. can't get to the broker with it!
-
-                #ifdef DEBUG
-                Serial.println("Not connect to wifi and not connected to mqtt broker");
-                #endif
-                
-                drawTwoByteSymbol(noWifiSymbolL, noWifiSymbolR, 111, 0);
-
-                // Let's try connecting to wifi again
-                setup_wifi();
-            }
-        }
-
-        // Network connectivity doesn't matter for stuff beyond this point
         previousPublishMillis = currentMillis;
     }
     
@@ -693,7 +667,6 @@ void loop()
         #ifdef DEBUG
         Serial.println("Set temperature changed!");
         #endif
-        if (!client.connected()) {reconnect();}
         if (client.connected()) 
         {
             sprintf(preferredTemp_msg, "%.0f", currentSetTemp);
