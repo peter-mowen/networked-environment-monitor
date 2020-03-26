@@ -13,6 +13,6 @@ void setup()
 void loop()
 {
     therm.loop();   // reads temperature from 
-    Serial.println("Temperature = " + (String)therm.readAmbientTemperature());
+    Serial.println("Temperature = " + (String)therm.getTemperatureVal());
     delay(500);
 }

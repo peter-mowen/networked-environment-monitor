@@ -11,6 +11,7 @@ public:
     
     Thermometer(int SDA, int SCL)
     {
+        temperature = 0;
         sda = SDA;
         scl = SCL;
     }
@@ -54,5 +55,10 @@ public:
     
         // Convert the data
         temperature = ((175.72 * (float)measurement) / 65536.0) - 46.85;
+    }
+
+    float getTemperatureVal()
+    {
+        return temperature;
     }
 };
