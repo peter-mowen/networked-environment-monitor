@@ -1,13 +1,30 @@
+// Debugs to run
+#define HOMENODE_DEBUG
+
 #include "Thermometer.cpp"
 
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h>
+
+// Define I2C pins
 #define SDA D2
 #define SCL D1
 
+// Instantiate thermometer object
 Thermometer therm(SDA, SCL);
+
+//MQTT Prep
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+char* ssid = "Schniblets";
+char* password = "pr3st0n!";
+char* mqttServer = "10.0.0.161";
+
 void setup()
 {
     Serial.begin(115200);
-    therm.setup();
+    therm.setup(client, ssid, password, mqttServer);
 }
 
 void loop()

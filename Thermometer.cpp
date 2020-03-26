@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include "HomeNode.cpp"
 
 class Thermometer
 {
@@ -7,7 +8,7 @@ class Thermometer
     int sda;            // SDA Pin
     int scl;            // SCL Pin
     int addr = 0x40;   // I2C address of si7021
-    
+    HomeNode _node;
 public:
     
     Thermometer(int SDA, int SCL)
@@ -15,12 +16,20 @@ public:
         temperature = 0;
         sda = SDA;
         scl = SCL;
+        HomeNode _node();
     }
 
     void setup()
     {
         // Connect to si7021
         setupSi7021();
+    }
+
+    void setup(PubSubClient client, char* ssid, char* password, char* mqttServer)
+    {
+        // Connect to si7021
+        setupSi7021();
+        _node.setup(client, ssid, password, mqttServer);
     }
     
     void loop()
