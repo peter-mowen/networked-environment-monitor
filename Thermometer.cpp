@@ -28,7 +28,22 @@ public:
         // Read temperature
         readAmbientTemperature();
     }
-    
+
+    float getTemperatureVal()
+    {
+        return temperature;
+    }
+
+private:
+    void setupSi7021()
+    {
+        Wire.begin(sda, scl);
+        Wire.beginTransmission(addr);
+        Wire.write(0xFE); // Write reset command
+        Wire.endTransmission();
+        delay(20);
+    }
+
     float readAmbientTemperature()
     {    
         unsigned int measurement;
@@ -57,20 +72,5 @@ public:
     
         // Convert the data
         temperature = ((175.72 * (float)measurement) / 65536.0) - 46.85;
-    }
-
-    float getTemperatureVal()
-    {
-        return temperature;
-    }
-
-private:
-    void setupSi7021()
-    {
-        Wire.begin(sda, scl);
-        Wire.beginTransmission(addr);
-        Wire.write(0xFE); // Write reset command
-        Wire.endTransmission();
-        delay(20);
     }
 };
