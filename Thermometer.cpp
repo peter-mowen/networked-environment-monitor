@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <Wire.h>
+
 class Thermometer
 {
     float temperature;  // current temperature
@@ -21,9 +22,10 @@ public:
         // Connect to si7021
         setupSi7021();
     }
-
+    
     void loop()
     {
+        // Read temperature
         readAmbientTemperature();
     }
     
@@ -31,12 +33,15 @@ public:
     {    
         unsigned int measurement;
         Wire.beginTransmission(addr);
-        // Send temperature measurement code
+        
+        // Send command to read temperature
         Wire.write(0xF3);
         Wire.endTransmission();
+        
+        // wait for chip to get temperature
         delay(20);
     
-        // Request 2 bytes of data
+        // Request temperature data - 2 bytes 
         Wire.requestFrom(addr, 2);
     
         //Read 2 bytes of data for temperature
@@ -46,7 +51,7 @@ public:
             unsigned int lsb = Wire.read();
             // Clear the last two bits of LSB to 00.
             // According to datasheet LSB of RH is always xxxxxx10
-            lsb &= 0xFC;
+            lsb &= 0xFC;    // 0xFC = 0b11111100
             measurement = msb << 8 | lsb;
         }
     
