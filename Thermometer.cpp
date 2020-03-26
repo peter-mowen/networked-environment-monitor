@@ -18,11 +18,8 @@ public:
 
     void setup()
     {
-        Wire.begin(sda, scl);
-        Wire.beginTransmission(addr);
-        Wire.write(0xFE); // Write reset command
-        Wire.endTransmission();
-        delay(20);
+        // Connect to si7021
+        setupSi7021();
     }
 
     void loop()
@@ -60,5 +57,15 @@ public:
     float getTemperatureVal()
     {
         return temperature;
+    }
+
+private:
+    void setupSi7021()
+    {
+        Wire.begin(sda, scl);
+        Wire.beginTransmission(addr);
+        Wire.write(0xFE); // Write reset command
+        Wire.endTransmission();
+        delay(20);
     }
 };
