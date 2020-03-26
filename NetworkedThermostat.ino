@@ -20,6 +20,8 @@ PubSubClient client(espClient);
 char* ssid = "Schniblets";
 char* password = "pr3st0n!";
 char* mqttServer = "10.0.0.161";
+char* clientID = "testNode1";
+char* heartbeatTopic = "heartbeat/";
 
 void setup()
 {
@@ -29,7 +31,7 @@ void setup()
 
 void loop()
 {
-    therm.loop();   // reads temperature from 
+    therm.loop(clientID, heartbeatTopic);   // reads temperature from 
     Serial.println("Temperature = " + (String)therm.getTemperatureVal());
     delay(500);
 }

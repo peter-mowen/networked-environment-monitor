@@ -38,6 +38,13 @@ public:
         readAmbientTemperature();
     }
 
+    void loop(char* clientID, char* heartbeatTopic)
+    {
+        // Read temperature
+        readAmbientTemperature();
+        _node.loop(clientID, heartbeatTopic);
+    }
+
     float getTemperatureVal()
     {
         return temperature;
