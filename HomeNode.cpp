@@ -7,39 +7,51 @@ class HomeNode
     PubSubClient _client;
     char* _ssid;
     char* _password;
-    char* _mqttServer;
+    IPAddress _mqttServer;
+    char* _heartbeatTopic;
+    char* _clientID;
 
 public:
     HomeNode()
     {
         _ssid = "";
         _password = "";
-        _mqttServer = "";
+        _heartbeatTopic = "";
+        _clientID = "";
     }
 
-    void setup(PubSubClient client, char* ssid, char* password, char* mqttServer)
+    void setup(PubSubClient client, char* ssid, char* password, IPAddress mqttServer, char* heartbeatTopic, char* clientID)
     {
         _client = client;
         _ssid = ssid;
         _password = password;
         _mqttServer = mqttServer;
+        _heartbeatTopic = heartbeatTopic;
+        _clientID = clientID;
 
-        setupWifi(ssid, password);
-        _client.setServer(mqttServer, 1883);
+        setupWifi();
+        _client.setServer(_mqttServer, 1883);
         //_client.setCallback([this] (char* topic, byte* payload, unsigned int length) { this->callback(topic, payload, length); });
     }
 
-    void loop(char* clientID, char* heartbeatTopic)
+    void loop()
     {
         if (!_client.connected()) 
         {
-            reconnect(clientID, heartbeatTopic);
+            reconnect();
         }
         _client.loop();
     }
 
+    void publishMsg(char* topic, char* msg)
+    {
+        _client.publish(topic, msg);
+    }
+
+    char* getClientID() { return _clientID; }
+    
 private:
-    void setupWifi(char* ssid, char* password) 
+    void setupWifi() 
     {
         delay(10);
         // We start by connecting to a WiFi network
@@ -47,10 +59,11 @@ private:
         #ifdef HOMENODE_DEBUG
         Serial.println();
         Serial.print("Connecting to ");
-        Serial.println(ssid);
+        Serial.println(_ssid);
         #endif
-        
-        WiFi.begin(ssid, password);
+
+        WiFi.mode(WIFI_STA);
+        WiFi.begin(_ssid, _password);
         
         while (WiFi.status() != WL_CONNECTED) {
             delay(500);
@@ -70,18 +83,18 @@ private:
 
     //void callback(char* topic, unsigned char* payload, unsigned int length){}
     
-    void reconnect(char* clientID, char* heartbeatTopic) 
+    void reconnect() 
     {
         // Loop until we're reconnected
         while (!_client.connected()) 
         {
             Serial.print("Attempting MQTT connection...");
             // Attempt to connect
-            if (_client.connect(clientID))
+            if (_client.connect(_clientID))
             {
                 Serial.println("connected");
                 // Once connected, publish an announcement...
-                _client.publish(heartbeatTopic, "hello world");
+                _client.publish(_heartbeatTopic, _clientID);
             }
             else 
             {

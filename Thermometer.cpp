@@ -4,51 +4,47 @@
 
 class Thermometer
 {
-    float temperature;  // current temperature
+    float _temperature;  // current temperature
     int sda;            // SDA Pin
     int scl;            // SCL Pin
     int addr = 0x40;   // I2C address of si7021
     HomeNode _node;
+    bool networked;
 public:
     
     Thermometer(int SDA, int SCL)
     {
-        temperature = 0;
+        _temperature = 0;
         sda = SDA;
         scl = SCL;
-        HomeNode _node();
+        networked = false;
     }
-
+    
     void setup()
     {
         // Connect to si7021
         setupSi7021();
     }
 
-    void setup(PubSubClient client, char* ssid, char* password, char* mqttServer)
+    void setup(HomeNode node)
     {
         // Connect to si7021
         setupSi7021();
-        _node.setup(client, ssid, password, mqttServer);
+        _node = node;
+        networked = true;
     }
     
     void loop()
     {
         // Read temperature
         readAmbientTemperature();
+        if (networked)
+        {
+            publishTemperature();
+        }
     }
 
-    void loop(char* clientID, char* heartbeatTopic)
-    {
-        // Read temperature
-        readAmbientTemperature();
-        _node.loop(clientID, heartbeatTopic);
-    }
-
-    float getTemperatureVal()
-    {
-        return temperature;
-    }
+    float getTemperatureVal() { return _temperature; }
 
 private:
     void setupSi7021()
@@ -87,6 +83,28 @@ private:
         }
     
         // Convert the data
-        temperature = ((175.72 * (float)measurement) / 65536.0) - 46.85;
+        _temperature = ((175.72 * (float)measurement) / 65536.0) - 46.85;
+    }
+
+    void publishTemperature()
+    {
+        // Create topic from clientID
+        char* clientID = _node.getClientID();
+        char* subTopic= "temperature";
+        char topic[40];
+        sprintf(topic, "%s/%s/", clientID, subTopic);
+        
+        // Loop the node to make sure it's connected
+        _node.loop();
+        
+        // Package temperature in message
+        char temperatureMsg[6];
+        sprintf(temperatureMsg, "%0.1f", _temperature);
+        
+        #ifdef THERMOMETER_DEBUG
+        Serial.println("Temperature = " + (String)temperatureMsg);
+        #endif
+        
+        _node.publishMsg(topic, temperatureMsg);
     }
 };

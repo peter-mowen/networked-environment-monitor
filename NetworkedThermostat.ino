@@ -1,5 +1,6 @@
 // Debugs to run
 #define HOMENODE_DEBUG
+#define THERMOMETER_DEBUG
 
 #include "Thermometer.cpp"
 
@@ -17,21 +18,23 @@ Thermometer therm(SDA, SCL);
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-char* ssid = "Schniblets";
-char* password = "pr3st0n!";
-char* mqttServer = "10.0.0.161";
+char* ssid = "home-automation";
+char* password = "AutomateTheHome";
+IPAddress mqttServer(192, 168, 2, 201);
 char* clientID = "testNode1";
 char* heartbeatTopic = "heartbeat/";
+
+HomeNode node;
 
 void setup()
 {
     Serial.begin(115200);
-    therm.setup(client, ssid, password, mqttServer);
+    node.setup(client, ssid, password, mqttServer, heartbeatTopic, clientID);
+    therm.setup(node);
 }
 
 void loop()
 {
-    therm.loop(clientID, heartbeatTopic);   // reads temperature from 
-    Serial.println("Temperature = " + (String)therm.getTemperatureVal());
+    therm.loop();   // reads temperature from 
     delay(500);
 }
