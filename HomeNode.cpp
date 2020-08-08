@@ -7,7 +7,7 @@ class HomeNode
     PubSubClient _client;
     char* _ssid;
     char* _password;
-    IPAddress _mqttServer;
+    char* _mqttServer;
     char* _heartbeatTopic;
     char* _clientID;
 
@@ -20,7 +20,7 @@ public:
         _clientID = "";
     }
 
-    void setup(PubSubClient client, char* ssid, char* password, IPAddress mqttServer, char* heartbeatTopic, char* clientID)
+    void setup(PubSubClient client, char* ssid, char* password, char* mqttServer, char* heartbeatTopic, char* clientID)
     {
         _client = client;
         _ssid = ssid;
