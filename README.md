@@ -6,7 +6,7 @@ The Networked Thermostater reads the local temperature and reports it via MQTT.
 Note that there are a few custom classes in this repository. Eventually, these
 will be broken out into their own repos, but for now they are housed here. The
 custom classes are:
-- Homenode: handles MQTT
+- HomeNode: handles MQTT
 - Si7021: handles I2C communication with si7021 chip. Only supports reading
     temperature at this time
 - Thermometer: uses the Si7021 class and Homenode class to read temperature and
@@ -64,4 +64,4 @@ description:
 I used node-RED to create a flow for monitoring the MQTT network and adding
 reported temperatures to a database running on a Raspberry Pi. Though that code
 is not part of this repository, an image of the user interface can be found in
-the img folder. 
+the img folder.
