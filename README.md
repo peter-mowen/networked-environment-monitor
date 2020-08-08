@@ -59,3 +59,9 @@ The following is a list of libraries which this sketch uses as well as a short
 description:
 - PubSubClient - enable MQTT communication
 - Wire - needed for I2C communication
+
+### Node-RED Flows
+I used node-RED to create a flow for monitoring the MQTT network and adding
+reported temperatures to a database running on a Raspberry Pi. Though that code
+is not part of this repository, an image of the user interface can be found in
+the img folder. 
