@@ -1,8 +1,8 @@
-// Debugs to run
+// Uncomment/comment to toggle printing debug information to serial port
 #define HOMENODE_DEBUG
 #define THERMOMETER_DEBUG
 
-#include "Thermometer.cpp"
+#include "Thermometer.h"
 
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
@@ -21,10 +21,10 @@ Thermometer therm;
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-char* ssid = "Schniblets_2.4_EXT";
-char* password = "pr3st0n!";
-char* mqttServer = "automationDatabase.local";
-char* clientID = "NEM 01";
+char* ssid = "";            // add wifi name here
+char* password = "";        // add wifi password here
+char* mqttServer = "";      // add mqtt dns name or IP addres here
+char* clientID = "";        // add clientID here. this identifies the node on mqtt 
 char* heartbeatTopic = "heartbeat/";
 
 HomeNode node;
@@ -34,14 +34,12 @@ void setup()
     Serial.begin(115200);
     sensor.setup();
     node.setup(client, ssid, password, mqttServer, heartbeatTopic, clientID);
-    therm.setup(sensor, node);
-
-    //wifi_set_sleep_type(LIGHT_SLEEP_T);
+    therm.setup(&sensor, &node);
 }
 
 void loop()
 {
-    therm.loop();   // reads temperature from 
+    therm.loop();
     delay(500);
     ESP.deepSleep(600e6);
 }
